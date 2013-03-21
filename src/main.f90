@@ -43,6 +43,7 @@ program free_fermi
 
   integer, parameter :: rk = selected_real_kind(p=15)
   integer, parameter :: internal_precision = 200
+  integer, parameter :: d = 3 ! dimension
   character(len=*), parameter :: fmt = '(es15.8)'
 
   ! Beta: inverse temperature (1/T), with T in units of hbar * ω.
@@ -157,9 +158,6 @@ contains
     ! temperature k*beta,
     !   S(k) = Σ exp(-beta k ϵ(j))
     ! Where the sum is over all s.p. states j.
-    ! For the d-dimensional harmonic oscillator, this is
-    !   S(k) = exp(-beta k d/2) * [1-exp(-beta k)]^-d
-    !        = (2 sinh(beta * k))^-d.
     ! Input:
     !   beta:   Inverse temperature 1/T, T in units of ℏω.
     !   k:   Integer, > 0.
@@ -169,21 +167,18 @@ contains
     type(mp_real), intent(in) :: beta
     integer,  intent(in) :: k
 
-    Sk = (1._rk - exp(-beta*k))**(-3) * exp(-beta*k*1.5_rk)
-    !Sk = (2*sinh((beta * k) / 2))**(-d)
+    Sk = (2*sinh((beta * k) / 2))**(-d)
   end function Sk
 
 
   type(mp_real) function S1k(beta,k)
     ! Calculate the derivative of S(k) w.r.t. beta,
-    !   S'(k) = ∂S(k)/∂beta.
-    !         = (3/2) k S(k) coth(-beta * k / 2)
+    !   S'(k) = ∂S(k)/∂beta
     implicit none
     type(mp_real), intent(in) :: beta
     integer,  intent(in) :: k
 
-    S1k = -3 * k * (Sk(beta,k) / 2)
-    S1k = S1k - 3 * exp(-(beta*k*5)/2) * k * (1 - exp(-beta*k))**(-4)
+    S1k = -k*d*(Sk(beta,k)/2) * mpcoth((beta*k)/2)
   end function S1k
 
 
@@ -198,23 +193,11 @@ contains
   type(mp_real) function S2k(beta,k)
     ! Calculate the second derivative of S(k) w.r.t. beta,
     !   S''(k) = ∂²S(k)/∂β².
-    !
-    !        12 exp(-7 β k/2) k^2     12 exp(-5 β k/2) k^2   9 exp(-3 beta k/2) k^2
-    ! S'' =  --------------------- +  -------------------- + ----------------------
-    !          (1 - exp(-β k))^5      (1 - exp(-betak))^4    4 (1 - exp(-betak))^3
     implicit none
     type(mp_real), intent(in) :: beta
     integer,  intent(in) :: k
 
-    type(mp_real) :: x,y, two, three, four
-
-    two = 2
-    three = 3
-    four = 4
-
-    x = (1 - exp(-beta*k))**(-3) * exp(-beta*k*three/two) * k**2 * three
-    y = exp(-beta*k) / (1 - exp(-beta*k))
-    S2k = x * ( three/four + four * y + four * y**2)
+    S2k = d * k**2 * (Sk(beta,k) / 4) * (d * cosh((beta*k)/2)**2 + 1)/(sinh((beta*k)/2)**2)
   end function S2k
 
 
@@ -228,13 +211,19 @@ contains
 
     integer :: k, N1
     type(mp_real) :: beta
+    type(mp_real) :: Svals(1:N)
 
     beta = beta1
+
+    do k=1,N
+       Svals(k) = Sk(beta,k)
+    end do
+
     Z(0) = 1
     do N1=1,N
        Z(N1) = 0
        do k=1,N1
-          Z(N1) = Z(N1) + (-1)**(k+1) * Sk(beta,k) * Z(N1-k)
+          Z(N1) = Z(N1) + (-1)**(k+1) * Svals(k) * Z(N1-k)
        end do
        Z(N1) = Z(N1) / N1
     end do
