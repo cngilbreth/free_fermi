@@ -49,9 +49,9 @@ program free_fermi
   ! Beta: inverse temperature (1/T), with T in units of hbar * ω.
   real(rk) :: beta
   ! Energy, partition function, and heat capacities
-  type(mp_real), allocatable :: E1(:),Z1(:),E2(:),Z2(:),CC1(:),CC2(:)
+  type(mp_real), allocatable :: CC(:),E(:),Z(:)
   ! Number of particles for first and second species
-  integer :: A1, A2
+  integer :: A1, A2, A
   ! Misc. variables
   character(len=256) :: buf
   character(len=32)  :: obs
@@ -72,41 +72,30 @@ program free_fermi
 
   call mpinit(internal_precision)
 
+  A = max(A1,A2)
   select case (obs)
   case ('H')
-     allocate(Z1(0:A1),E1(0:A1))
-     allocate(Z2(0:A2),E2(0:A2))
-     call calc_Z(beta,A1,Z1)
-     call calc_E(beta,A1,Z1,E1)
-     call calc_Z(beta,A2,Z2)
-     call calc_E(beta,A2,Z2,E2)
-     val = E1(A1) + E2(A2)
+     allocate(Z(0:A),E(0:A))
+     call calc_Z(beta,A,Z)
+     call calc_E(beta,A,Z,E)
+     val = E(A1) + E(A2)
   case ('H_spin')
-     allocate(Z1(0:A1),E1(0:A1))
-     allocate(Z2(0:A2),E2(0:A2))
-     call calc_Z_spin(beta,A1,Z1)
-     call calc_E_spin(beta,A1,Z1,E1)
-     call calc_Z_spin(beta,A2,Z2)
-     call calc_E_spin(beta,A2,Z2,E2)
-     val = E1(A1) + E2(A2)
+     allocate(Z(0:A),E(0:A))
+     call calc_Z_spin(beta,A,Z)
+     call calc_E_spin(beta,A,Z,E)
+     val = E(A1) + E(A2)
   case ('F')
-     allocate(Z1(0:A1))
-     allocate(Z2(0:A2))
-     call calc_Z(beta,A1,Z1)
-     call calc_Z(beta,A2,Z2)
-     val = (-log(Z1(A1)) - log(Z2(A2)))/beta
+     allocate(Z(0:A))
+     call calc_Z(beta,A,Z)
+     val = (-log(Z(A1)) - log(Z(A2)))/beta
   case ('F_spin')
-     allocate(Z1(0:A1))
-     allocate(Z2(0:A2))
-     call calc_Z_spin(beta,A1,Z1)
-     call calc_Z_spin(beta,A2,Z2)
-     val = (-log(Z1(A1)) - log(Z2(A2)))/beta
+     allocate(Z(0:A))
+     call calc_Z_spin(beta,A,Z)
+     val = (-log(Z(A1)) - log(Z(A2)))/beta
   case ('C')
-     allocate(CC1(0:A1))
-     allocate(CC2(0:A2))
-     call calc_C(beta,A1,CC1)
-     call calc_C(beta,A2,CC2)
-     val = CC1(A1) + CC2(A2)
+     allocate(CC(0:A))
+     call calc_C(beta,A,CC)
+     val = CC(A1) + CC(A2)
   case default
      write (0,'(a)') "Error: invalid observable "//trim(obs)//"."
      write (0,'(a)') "Type ""free_fermi help"" for more info."
