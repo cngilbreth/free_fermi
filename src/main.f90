@@ -203,7 +203,7 @@ contains
 
   subroutine calc_Z(beta1,N,Z)
     ! Calculate the canonical partition functions for 0,1,...,N free fermions in
-    ! a 3D harmonic trap.
+    ! a d-dimensional harmonic trap.
     implicit none
     real(rk), intent(in) :: beta1
     integer,  intent(in) :: N
@@ -232,7 +232,7 @@ contains
 
   subroutine calc_E(beta1,N,Z,E)
     ! Calculate the canonical thermal energy E for 0,1,...,N free fermions in a
-    ! 3D harmonic trap.
+    ! d-dimensional harmonic trap.
     implicit none
     real(rk), intent(in)  :: beta1
     integer,  intent(in)  :: N
@@ -264,7 +264,7 @@ contains
 
   subroutine calc_C(beta1,N,C)
     ! Calculate the canonical ensemble heat capacity C for 0,1,...,N free
-    ! fermions in a 3D harmonic trap.
+    ! fermions in a d-dimensional harmonic trap.
     implicit none
     real(rk), intent(in)  :: beta1
     integer,  intent(in)  :: N
@@ -310,7 +310,7 @@ contains
 
 !  subroutine calc_CN_dT(beta,N,C)
 !    ! Calculate the canonical heat capacity C for 0,1,...,N free fermions in a
-!    ! 3D harmonic trap.
+!    ! d-dimensional harmonic trap.
 !    ! This version computes it via a numerical derivative. Not sure how accurate
 !    ! it is. The extra precision should help.
 !    implicit none
@@ -337,7 +337,7 @@ contains
 
   subroutine calc_Z_spin(beta1,N,Z)
     ! Calculate the canonical partition functions for 0,1,...,N free fermions in
-    ! a 3D harmonic trap, INCLUDING a spin degree of freedom.
+    ! a d-dimensional harmonic trap, INCLUDING a spin degree of freedom.
     implicit none
     real(rk), intent(in) :: beta1
     integer,  intent(in) :: N
@@ -345,13 +345,18 @@ contains
 
     integer :: k, N1
     type(mp_real) :: beta
+    type(mp_real) :: Svals(1:N)
 
     beta = beta1
+    do k=1,N
+       Svals(k) = Sk(beta,k)
+    end do
+
     Z(0) = 1
     do N1=1,N
        Z(N1) = 0
        do k=1,N1
-          Z(N1) = Z(N1) + (-1)**(k+1) * 2 * Sk(beta,k) * Z(N1-k)
+          Z(N1) = Z(N1) + (-1)**(k+1) * 2 * Svals(k) * Z(N1-k)
        end do
        Z(N1) = Z(N1) / N1
     end do
@@ -360,7 +365,7 @@ contains
 
   subroutine calc_E_spin(beta1,N,Z,E)
     ! Calculate the canonical thermal energy E for 0,1,...,N free fermions in a
-    ! 3D harmonic trap, INCLUDING a spin degree of freedom.
+    ! d-dimensional harmonic trap, INCLUDING a spin degree of freedom.
     implicit none
     real(rk), intent(in)  :: beta1
     integer,  intent(in)  :: N
@@ -369,13 +374,19 @@ contains
 
     integer :: k, N1
     type(mp_real) :: beta
+    type(mp_real) :: Svals(1:N), S1vals(1:N)
 
     beta = beta1
+    do k=1,N
+       Svals(k) = Sk(beta,k)
+       S1vals(k) = S1k(beta,k)
+    end do
+
     E(0) = 0
     do N1=1,N
        E(N1) = 0
        do k=1,N1
-          E(N1) = E(N1) + (-1)**(k+1) * 2 * (-S1k(beta,k) * Z(N1-K) + Sk(beta,k) * E(N1-k))
+          E(N1) = E(N1) + (-1)**(k+1) * 2 * (-S1vals(k) * Z(N1-K) + Svals(k) * E(N1-k))
        end do
        E(N1) = E(N1) / N
     end do
