@@ -238,16 +238,21 @@ contains
     integer,  intent(in)  :: N
     type(mp_real), intent(in)  :: Z(0:N)
     type(mp_real), intent(out) :: E(0:N)
-
+    type(mp_real) :: Svals(1:N), S1vals(1:N)
     integer :: k, N1
     type(mp_real) :: beta
 
     beta = beta1
+    do k=1,N
+       Svals(k) = Sk(beta,k)
+       S1vals(k) = S1k(beta,k)
+    end do
+
     E(0) = 0
     do N1=1,N
        E(N1) = 0
        do k=1,N1
-          E(N1) = E(N1) + (-1)**(k+1) * (-S1k(beta,k) * Z(N1-K) + Sk(beta,k) * E(N1-k))
+          E(N1) = E(N1) + (-1)**(k+1) * (-S1vals(k) * Z(N1-K) + Svals(k) * E(N1-k))
        end do
        E(N1) = E(N1) / N1
     end do
