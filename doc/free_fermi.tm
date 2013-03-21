@@ -3,6 +3,8 @@
 <style|generic>
 
 <\body>
+  <section|Calculation of <math|S<around*|(|k|)>>>
+
   <math|S<around*|(|k|)>> is defined as:
 
   <\equation*>
@@ -46,9 +48,29 @@
   arithmetic. (An alternative method at low temperature would be to use
   particle-number projection.)
 
-  \;
+  <section|Calculation of observables>
+
+  <\equation*>
+    Z<rsub|><around*|(|N|)>=<frac|1|N><big|sum><rsub|k=1><rsup|N><around*|(|\<um\>|)><rsup|k+1>S<around*|(|k|)>Z<around*|(|N-k|)><space|0.2spc>.
+  </equation*>
+
+  <\eqnarray*>
+    <tformat|<table|<row|<cell|E<rsub|><around*|(|N|)>>|<cell|=>|<cell|<frac|-1|Z<rsub|><around*|(|N|)>>*<frac|\<partial\>Z|\<partial\>\<beta\>>=:<frac|-1|Z<around*|(|N|)>>
+    Z<rprime|'><rsub|><around*|(|N|)>>>>>
+  </eqnarray*>
+
+  <\eqnarray*>
+    <tformat|<table|<row|<cell|Z<rprime|'><rsub|><around*|(|N|)>>|<cell|=>|<cell|<frac|1|N><big|sum><rsub|k=1><rsup|N><around*|(|\<um\>|)><rsup|k+1><around*|[|S<rprime|'><around*|(|k|)>Z<around*|(|N-k|)>+S<around*|(|k|)>Z<rprime|'><around*|(|N-k|)>|]>.>>>>
+  </eqnarray*>
 
   \;
 
   \;
 </body>
+
+<\references>
+  <\collection>
+    <associate|auto-1|<tuple|1|?>>
+    <associate|auto-2|<tuple|2|?>>
+  </collection>
+</references>

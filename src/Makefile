@@ -1,4 +1,4 @@
-FC = gfortran -Wall -Wextra
+FC = gfortran -Wall -Wextra -g -O0 -fbounds-check
 
 free_fermi: mpfun90.o mpmod90.o main.o
 	$(FC) -o $@ $+

@@ -156,7 +156,7 @@ contains
     type(mp_real), intent(in) :: beta
     integer,  intent(in) :: k
 
-    Sk = (2*sinh((beta * k) / 2))**(-d)
+    Sk = (2*sinh((beta*k)/2))**(-d)
   end function Sk
 
 
@@ -241,12 +241,12 @@ contains
     do N1=1,N
        E(N1) = 0
        do k=1,N1
-          E(N1) = E(N1) + (-1)**(k+1) * (-S1vals(k) * Z(N1-K) + Svals(k) * E(N1-k))
+          E(N1) = E(N1) + (-1)**(k+1) * (S1vals(k) * Z(N1-K) + Svals(k) * E(N1-k))
        end do
        E(N1) = E(N1) / N1
     end do
     do N1=1,N
-       E(N1) = E(N1) / Z(N1)
+       E(N1) = -E(N1) / Z(N1)
     end do
   end subroutine calc_E
 
@@ -371,16 +371,18 @@ contains
        S1vals(k) = S1k(beta,k)
     end do
 
+    ! First: Calculate Z'(beta), storing the result in E
     E(0) = 0
     do N1=1,N
        E(N1) = 0
        do k=1,N1
-          E(N1) = E(N1) + (-1)**(k+1) * 2 * (-S1vals(k) * Z(N1-K) + Svals(k) * E(N1-k))
+          E(N1) = E(N1) + (-1)**(k+1) * 2 * (S1vals(k) * Z(N1-K) + Svals(k) * E(N1-k))
        end do
        E(N1) = E(N1) / N1
     end do
+    ! Now E = -Z' / Z.
     do N1=1,N
-       E(N1) = E(N1) / Z(N1)
+       E(N1) = -E(N1) / Z(N1)
     end do
   end subroutine calc_E_spin
 

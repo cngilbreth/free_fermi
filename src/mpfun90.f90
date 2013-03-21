@@ -865,7 +865,7 @@ subroutine mpdotdx (n, isa, a, isb, db, c, mpnw)
 !   begins with MPIDB = 8.
 
 double precision d1(mpnw+5), d2(mpnw+5), db(isb*n), dmax, &
-  dt0, dt1, dt2, dt3, dt4
+  dt0, dt1, dt2, dt3
 
 !   Set DMAX to the largest DP whole number that can be represented exactly:
 !   2.d0 ** 53 on IEEE systems.
@@ -1856,7 +1856,7 @@ subroutine mpmul (a, b, c, mpnw)
 !   of A and B are both 64 words, then MPNW must be at least 128 words to
 !   obtain the complete double-long product in C.
 
-double precision d, t1, t2, t3
+double precision d, t1, t2
 dimension a(mpnw+2), b(mpnw+2), c(mpnw+4), d(mpnw+4)
 
 if (mpier .ne. 0) then
@@ -5161,8 +5161,8 @@ subroutine mpfft1 (is, m, n1, n2, x, y)
 !   This employs the two-pass variant of the "four-step" FFT.  See the
 !   article by David H. Bailey in J. of Supercomputing, March 1990, p. 23-35.
 
-complex (mpkdp) x(n1,n2), y(n2+mpnsp1,n1), q1(mpnsp2), z1(mpnrow+mpnsp1,n1), &
-  q2(mpnsp2), z2(mpnrow+mpnsp1,n1)
+complex (mpkdp) x(n1,n2), y(n2+mpnsp1,n1), z1(mpnrow+mpnsp1,n1), &
+  z2(mpnrow+mpnsp1,n1)
 
 n = 2 ** m
 m1 = (m + 1) / 2

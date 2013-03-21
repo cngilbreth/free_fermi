@@ -110,7 +110,7 @@ contains
 !   extra-accurate calculations of the constants, and then is reset to MPNWX.
 
     integer, optional:: n_mpipl
-    integer i, mpnw
+    integer mpnw
     real*4 t0(mp4+1), t1(mp4+1), t2(mp4+1), t3(mp4+1), t4(mp4+1)
 
     if (present (n_mpipl)) then
@@ -690,8 +690,8 @@ subroutine mpoutc (a, b, n, mpnw)
 integer i, ia, ix, j, k0, k1, l, mpnw, na, nl, n5, nws, n, no, nx
 character*1 b(n)
 character*16 ca
-real*8 aa, al2, con, t1
-parameter (al2 = 0.301029995663981195d0, con = 0.8304820235d0)
+real*8 aa, t1
+real*8, parameter :: al2 = 0.301029995663981195d0
 real a(mpnw+2), f(8), s(2*mpnw+10)
 real*8 an
 ! character*16 mpdigout
@@ -906,7 +906,7 @@ recursive subroutine mpoutcx (a, b, n, mpnw)
 implicit none
 integer i, ia, ie, ie1, ie2, i1, i2, k0, k1, k2, k3, k4, m1, m2, &
   mpnw, mpnws, n, na, nb1, nb2, ncr, no, n4
-double precision al2, t1, t2, t3
+double precision al2, t1, t2
 character*1 b(*), b1(8*mpnw+30), b2(8*mpnw+30)
 character*10 dig
 character*16 c1, c2
@@ -7387,8 +7387,8 @@ subroutine mperfc (t, z)
 !   a 1968 paper by Chiarella and Reichel.
 
   implicit none
-  integer i, j, k, n, ndp1, ndps, ntab, nwks, nwords
-  type (mp_real) eps, f, t, t1, t2, t3, t4, t5, z
+  integer i, k, n, ndp1, ndps, ntab, nwks, nwords
+  type (mp_real) eps, t, t1, t2, t3, t4, t5, z
   real*8 alpha, d1, d2, dpi, dlog10, dlog2
   type (mp_real) etab (:)
   allocatable etab
@@ -7483,10 +7483,10 @@ subroutine mpgamma (t, z)
 !   This evaluates the gamma function, using an algorithm of R. W. Potter.
 
 implicit none
-integer i, j, k, ndp, neps, nt, nwords
-double precision alpha, con1, con2, d1, d2
-parameter (con1 = 1.151292547d0, con2 = 1.974476770d0)
-type (mp_real) eps, sum1, sum2, t, t1, t2, t3, t4, tn, z
+integer i, j, ndp, neps, nt, nwords
+double precision alpha, con1, d2
+parameter (con1 = 1.151292547d0)
+type (mp_real) eps, sum1, sum2, t, t1, t2, t3, tn, z
 
 call mpgetprecwords (nwords)
 neps = (-nwords - 1) * 7.224719896d0
