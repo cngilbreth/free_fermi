@@ -1,7 +1,7 @@
 ! free_fermi.f90: Code for calculating canonical thermodynamic quantities for
-! free fermions in a harmonic trap.
+! free fermions in a harmonic trap of arbitrary dimension.
 ! http://infty.us/free_fermi/free_fermi.html
-! v1.0
+! v1.1, March 2013
 !
 ! Copyright (c) 2013 Christopher N. Gilbreth
 !
@@ -377,28 +377,11 @@ contains
        do k=1,N1
           E(N1) = E(N1) + (-1)**(k+1) * 2 * (-S1vals(k) * Z(N1-K) + Svals(k) * E(N1-k))
        end do
-       E(N1) = E(N1) / N
+       E(N1) = E(N1) / N1
     end do
     do N1=1,N
        E(N1) = E(N1) / Z(N1)
     end do
   end subroutine calc_E_spin
-
-
-! integer function nsp(nmax)
-!    ! Number of single-particles harmonic oscillator states with 2*n + l <=
-!    ! Nmax.
-!    implicit none
-!    integer, intent(in) :: nmax
-!
-!    integer :: n, l
-!
-!    nsp = 0;
-!    do n=0,nmax/2
-!       do l=0,nmax-2*n
-!          nsp = nsp + 2*L + 1
-!       end do
-!    end do
-!  end function nsp
 
 end program free_fermi
