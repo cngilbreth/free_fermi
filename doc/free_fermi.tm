@@ -51,19 +51,33 @@
   <section|Calculation of observables>
 
   <\equation*>
-    Z<rsub|><around*|(|N|)>=<frac|1|N><big|sum><rsub|k=1><rsup|N><around*|(|\<um\>|)><rsup|k+1>S<around*|(|k|)>Z<around*|(|N-k|)><space|0.2spc>.
+    Z<rsub|><around*|(|N|)>=<frac|1|N><big|sum><rsub|k=1><rsup|N><around*|(|\<um\>|)><rsup|k+1>S<around*|(|k|)>Z<around*|(|N-k|)><space|0.2spc>,<space|2em>Z<around*|(|0|)>=1.
   </equation*>
 
   <\eqnarray*>
     <tformat|<table|<row|<cell|E<rsub|><around*|(|N|)>>|<cell|=>|<cell|<frac|-1|Z<rsub|><around*|(|N|)>>*<frac|\<partial\>Z|\<partial\>\<beta\>>=:<frac|-1|Z<around*|(|N|)>>
-    Z<rprime|'><rsub|><around*|(|N|)>>>>>
+    Z<rprime|'><rsub|><around*|(|N|)>.>>>>
   </eqnarray*>
 
   <\eqnarray*>
     <tformat|<table|<row|<cell|Z<rprime|'><rsub|><around*|(|N|)>>|<cell|=>|<cell|<frac|1|N><big|sum><rsub|k=1><rsup|N><around*|(|\<um\>|)><rsup|k+1><around*|[|S<rprime|'><around*|(|k|)>Z<around*|(|N-k|)>+S<around*|(|k|)>Z<rprime|'><around*|(|N-k|)>|]>.>>>>
   </eqnarray*>
 
-  \;
+  <section|Particle-number projection>
+
+  <\equation*>
+    Z<rsub|N>=<frac|1|2\<pi\>><big|int><rsub|0><rsup|2\<pi\>>d\<varphi\>*e<rsup|i\<varphi\>N>e<rsup|\<alpha\>N>*\<zeta\><around*|(|\<varphi\>,\<alpha\>|)>,
+  </equation*>
+
+  where
+
+  <\equation*>
+    \<zeta\><around*|(|\<varphi\>,\<alpha\>|)>=Tr<rsub|GC><around*|(|e<rsup|-\<beta\><wide|h|^>>e<rsup|-i\<varphi\><wide|N|^>>e<rsup|-\<alpha\><wide|N|^>>|)>=<big|prod><rsub|k=1><rsup|\<infty\>><around*|(|1+e<rsup|-\<beta\>*\<varepsilon\><rsub|k>>e<rsup|-i\<varphi\>>e<rsup|-\<alpha\>>|)><space|0.2spc>.
+  </equation*>
+
+  This formula is more appropriate at low temperatures, where only a few
+  terms in the product are important (<math|\<beta\>> is large). At high
+  temperatures, the product becomes more difficult to compute.
 
   \;
 </body>
@@ -72,5 +86,21 @@
   <\collection>
     <associate|auto-1|<tuple|1|?>>
     <associate|auto-2|<tuple|2|?>>
+    <associate|auto-3|<tuple|3|?>>
   </collection>
 </references>
+
+<\auxiliary>
+  <\collection>
+    <\associate|toc>
+      <vspace*|1fn><with|font-series|<quote|bold>|math-font-series|<quote|bold>|Calculation
+      of <with|mode|<quote|math>|S<around*|(|k|)>>>
+      <datoms|<macro|x|<repeat|<arg|x>|<with|font-series|medium|<with|font-size|1|<space|0.2fn>.<space|0.2fn>>>>>|<htab|5mm>>
+      <no-break><pageref|auto-1><vspace|0.5fn>
+
+      <vspace*|1fn><with|font-series|<quote|bold>|math-font-series|<quote|bold>|Calculation
+      of observables> <datoms|<macro|x|<repeat|<arg|x>|<with|font-series|medium|<with|font-size|1|<space|0.2fn>.<space|0.2fn>>>>>|<htab|5mm>>
+      <no-break><pageref|auto-2><vspace|0.5fn>
+    </associate>
+  </collection>
+</auxiliary>
