@@ -129,7 +129,8 @@ contains
     xub = 200.d0
 
     ! "exponent" gives logarithm base 2
-    max_iterations = exponent((xub - xlb)/x_accuracy) + 2
+    max_iterations = exponent((xub - xlb)/x_accuracy) + 1
+    max_iterations = max_iterations * 2
     if (max_iterations < 1) stop "Error: no iterations needed"
 
     flb = calc_Nmu(beta,xlb) - N
