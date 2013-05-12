@@ -43,7 +43,7 @@ program free_fermi_proj
   ! Misc. variables
   character(len=256) :: buf
   character(len=32)  :: obs
-  real(rk) :: val
+  real(rk) :: val, Z
 
   if (command_argument_count() .lt. 3) then
      call print_help()
@@ -65,6 +65,9 @@ program free_fermi_proj
   case ('F')
      call calc_Z(beta,A,val)
      val = -log(val)/beta
+  case ('E')
+     call calc_Z(beta,A,Z)
+     call calc_E(beta,A,Z,val)
   case default
      write (0,'(a)') "Error: invalid observable "//trim(obs)//"."
      write (0,'(a)') "Type ""free_fermi help"" for more info."
@@ -78,38 +81,10 @@ contains
 
   subroutine print_help()
     implicit none
-    write (6,'(a)') 'ffree: Calculate canonical-ensemble thermodynamic observables for two species'
-    write (6,'(a)') '       of noninteracting fermions in a harmonic trap.'
+    write (6,'(a)') 'ffree: Calculate canonical-ensemble thermodynamic observables for'
+    write (6,'(a)') '       noninteracting fermions in a harmonic trap.'
     write (6,'(a)') ''
   end subroutine print_help
-
-
-  subroutine integrate(fn,lb,ub,nreg,s)
-    ! Trapezoidal integration
-    implicit none
-    interface
-       function fn(x)
-         real(8), intent(in) :: x
-         complex(8) :: fn
-       end function fn
-    end interface
-    real(rk), intent(in) :: lb,ub
-    integer,  intent(in) :: nreg
-    complex(rk), intent(out) :: s
-
-    real(rk) :: x, dx
-    integer :: i
-
-    dx = (ub - lb)/nreg
-    x = lb
-    s = fn(x) * dx/2
-    do i=1,nreg-1
-       x = x + dx
-       s = s + fn(x)*dx
-    end do
-    s = s + fn(ub) * dx/2
-  end subroutine integrate
-
 
 
   subroutine find_mu(beta,N,mu)
@@ -134,7 +109,6 @@ contains
     ! "exponent" gives logarithm base 2
     max_iterations = exponent((xub - xlb)/x_accuracy) + 1
     max_iterations = max_iterations * 2
-    if (max_iterations < 1) stop "Error: no iterations needed"
 
     flb = calc_Nmu(beta,xlb) - N
     fub = calc_Nmu(beta,xub) - N
@@ -204,7 +178,7 @@ contains
     real(rk), parameter :: lb = 0.d0, ub = 2.d0*pi
     integer,  parameter :: nreg = 128
 
-    complex(rk) :: s
+    complex(rk) :: sum
     real(rk) :: phi, dphi, mu
     integer :: i
 
@@ -213,14 +187,14 @@ contains
     ! Numerical integration -- trapezoidal
     dphi = (ub - lb)/nreg
     phi = lb
-    s = trgc_phi(beta,mu,A,phi) * dphi/2
+    sum = trgc_phi(beta,mu,A,phi) * dphi/2
     do i=1,nreg-1
        phi = phi + dphi
-       s = s + trgc_phi(beta,mu,A,phi)*dphi
+       sum = sum + trgc_phi(beta,mu,A,phi)*dphi
     end do
-    s = s + trgc_phi(beta,mu,A,ub) * dphi/2
+    sum = sum + trgc_phi(beta,mu,A,ub) * dphi/2
 
-    Z = real(s) / (2*pi)     
+    Z = real(sum) / (2*pi)     
   end subroutine calc_Z
 
 
@@ -232,7 +206,7 @@ contains
     !   A:     Number of particles
     ! Output:
     !   Return value:
-    !     trgc = exp(-i φ A - β μ A) det(1 + exp(-β h) exp(i φ + β μ))
+    !     trgc = exp(-iφA - βμA) det(1 + exp(-βh) exp(iφ + βμ))
     implicit none
     real(rk), intent(in) :: beta,mu,phi
     integer, intent(in) :: A
@@ -254,5 +228,70 @@ contains
     tr = exp(-(0.d0,1.d0) * phi * A - beta * mu * A) * tr
   end function trgc_phi
 
+
+  subroutine calc_E(beta,A,Z,E)
+    ! Calculate the canonical energy for N free fermions in a d-dimensional
+    ! harmonic trap.
+    ! Notes:
+    !   E = Tr_N [exp(-β h) h]/Z
+    !     = 1/(2π Z) * ∫dφ exp(-iφA - βμ) Tr[exp(-βh) h exp(iφ + βμ)]
+    implicit none
+    real(rk), intent(in) :: beta
+    integer,  intent(in) :: A
+    real(rk), intent(in) :: Z
+    real(rk), intent(out) :: E
+
+    real(rk), parameter :: lb = 0.d0, ub = 2.d0*pi
+    integer,  parameter :: nreg = 128
+
+    complex(rk) :: sum
+    real(rk) :: phi, dphi, mu
+    integer :: i
+
+    call find_mu(beta,A,mu)
+
+    ! Numerical integration -- trapezoidal
+    dphi = (ub - lb)/nreg
+    phi = lb
+    sum = trh_phi(beta,mu,A,phi) * dphi/2
+    do i=1,nreg-1
+       phi = phi + dphi
+       sum = sum + trh_phi(beta,mu,A,phi)*dphi
+    end do
+    sum = sum + trh_phi(beta,mu,A,ub) * dphi/2
+
+    E = real(sum) / (2*pi) / Z     
+  end subroutine calc_E
+
+
+
+  function trh_phi(beta,mu,A,phi) result(tr)
+    ! Compute
+    !   <h>(φ) = exp(-iφA - βμA) Tr(exp[-β(h - μ) + iφ] h)
+    !          = exp(-iφA - βμA) 
+    !              * {Tr(exp[-β(h - μ) + iφ] h) / Tr(exp[-β(h - μ) + iφ])} 
+    !              * Tr(exp[-β(h - μ) + iφ]
+    !          = exp(-iφA - βμA) 
+    !              * {∑_k g_k ϵ_k/(1 + exp[β(h - μ) - iφ])} 
+    !              * Tr(exp[-β(h - μ) + iφ].
+    implicit none
+    real(rk), intent(in) :: beta,mu,phi
+    integer,  intent(in) :: A
+
+    integer :: k
+    complex(rk) :: tr, fac, term
+    real(rk) :: r
+
+    fac = exp(beta * (1.5d0 - mu) - (0.d0,1.d0)*phi)
+    k = 0; tr = 0; r = exp(beta)
+    do
+       term = 1.d0/(1.d0 + fac) * (((k+1)*(k+2))/2) * (k + 1.5d0)
+       if (abs(term) .lt. epsilon(1d0)) exit
+       tr = tr + term
+       fac = fac * r
+       k = k + 1
+    end do
+    tr = tr * trgc_phi(beta,mu,A,phi)
+  end function trh_phi
 
 end program free_fermi_proj
