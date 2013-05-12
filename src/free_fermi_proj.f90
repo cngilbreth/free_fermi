@@ -32,7 +32,6 @@ program free_fermi_proj
   implicit none
 
   integer, parameter :: rk = kind(1d0)
-  integer, parameter :: d = 3 ! dimension
   character(len=*), parameter :: fmt = '(es15.8)'
   real(rk), parameter :: pi=3.141592653589793d0
 
@@ -44,6 +43,10 @@ program free_fermi_proj
   character(len=256) :: buf
   character(len=32)  :: obs
   real(rk) :: val, Z
+
+  ! PHYSICAL PARAMETERS
+  integer, parameter :: spin_degen = 1 ! Spin degeneracy
+  integer, parameter :: d = 3          ! Dimension of space (don't change!)
 
   if (command_argument_count() .lt. 3) then
      call print_help()
@@ -85,6 +88,27 @@ contains
     write (6,'(a)') '       noninteracting fermions in a harmonic trap.'
     write (6,'(a)') ''
   end subroutine print_help
+
+
+  integer function degen(n) result(g)
+    ! Degeneracy of oscillator state with n quanta
+    ! g = n * (n + 1) * ... * (n + d - 1) / d!
+    ! I've only checked this formula for d=1,2,3,4. Haven't proved generally.
+    ! Haven't checked the code for d other than 3.
+    implicit none
+    integer, intent(in) :: n
+
+    integer :: i
+
+    g = 1
+    do i=1,d-1
+       g = g * (n + i)
+    end do
+    do i=2,d-1
+       g = g / i
+    end do
+    g = g * spin_degen
+  end function degen
 
 
   subroutine find_mu(beta,N,mu)
@@ -156,7 +180,7 @@ contains
     k = 0
     do
        p = exp(beta * (k + 1.5d0 - mu))
-       term = 1.d0/(1.d0 + p) * (((k+1)*(k+2))/2)
+       term = 1.d0/(1.d0 + p) * degen(k)
        if (abs(term) .lt. epsilon(1d0)) exit
        nmu = nmu + term
        k = k + 1
@@ -221,7 +245,7 @@ contains
     m = 0
     do
        if (abs(term) .lt. epsilon(1d0)) exit
-       tr = tr * (1.d0 + term)**(((m+1)*(m+2))/2)
+       tr = tr * (1.d0 + term)**(degen(m))
        term = term * r
        m = m + 1
     end do
@@ -285,7 +309,7 @@ contains
     fac = exp(beta * (1.5d0 - mu) - (0.d0,1.d0)*phi)
     k = 0; tr = 0; r = exp(beta)
     do
-       term = 1.d0/(1.d0 + fac) * (((k+1)*(k+2))/2) * (k + 1.5d0)
+       term = 1.d0/(1.d0 + fac) * degen(k) * (k + 1.5d0)
        if (abs(term) .lt. epsilon(1d0)) exit
        tr = tr + term
        fac = fac * r
@@ -294,4 +318,5 @@ contains
     tr = tr * trgc_phi(beta,mu,A,phi)
   end function trh_phi
 
+  
 end program free_fermi_proj
