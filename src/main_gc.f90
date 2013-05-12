@@ -161,10 +161,9 @@ contains
 10  return
     ! Postconditions:
     !   1. abs(fmid) <= y_accuracy
+    !   2. xmid = (xlb + xub)/2
     !   2. abs(xub - xlb) < x_accuracy
-    !   3. s*f(xlb) <= 0
-    !   4. s*f(xub) >= 0
-    !   5. xmid = (xlb + xub)/2
+    !   3. sign(f(xlb)) .ne. sign(f(xub))
   end subroutine find_mu
 
 
