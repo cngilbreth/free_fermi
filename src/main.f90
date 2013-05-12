@@ -28,11 +28,11 @@
 ! (1) Calculations are performed using a recursion relation method from J. Chem
 ! Phys *98*, 2484 (1993).
 !
-! (2) This code uses the MPFUN90 arbitrary-precision arithmetic library, which
-! is necessary for low-temperature calculations using this method. It is
-! included in the files mpfun90.f90 and mpmod90.f90. See also
-! http://crd-legacy.lbl.gov/~dhbailey/mpdist/. The internal_precision parameter below
-! specifies the precision used.
+! (2) This code uses the MPFUN90 arbitrary-precision arithmetic
+! library. Extended precision is necessary for low-temperature calculations
+! using this method. It is included in the files mpfun90.f90 and
+! mpmod90.f90. See also http://crd-legacy.lbl.gov/~dhbailey/mpdist/. The
+! internal_precision parameter below specifies the precision used.
 !
 ! (3) The MPFUN90 library is not covered by the above copyright. See instead the
 ! files mpfun90.f90 and mpmod90.f90 for copyright information about those files.
@@ -50,14 +50,14 @@ program free_fermi
   real(rk) :: beta
   ! Energy, partition function, and heat capacities
   type(mp_real), allocatable :: CC(:),E(:),Z(:)
-  ! Number of particles for first and second species
-  integer :: A1, A2, A
+  ! Number of particles
+  integer :: A
   ! Misc. variables
   character(len=256) :: buf
   character(len=32)  :: obs
   real(rk) :: val
 
-  if (command_argument_count() .lt. 4) then
+  if (command_argument_count() .lt. 3) then
      call print_help()
      stop
   end if
@@ -66,36 +66,38 @@ program free_fermi
      call print_help()
      stop
   end if
-  call getarg(2,buf); read(buf,*) A1
-  call getarg(3,buf); read(buf,*) A2
-  call getarg(4,buf); read(buf,*) beta
+  call getarg(2,buf); read(buf,*) A
+  call getarg(3,buf); read(buf,*) beta
 
   call mpinit(internal_precision)
 
-  A = max(A1,A2)
   select case (obs)
-  case ('H')
+  case ('E')
      allocate(Z(0:A),E(0:A))
      call calc_Z(beta,A,Z)
      call calc_E(beta,A,Z,E)
-     val = E(A1) + E(A2)
-  case ('H_spin')
+     val = E(A)
+  case ('E_spin')
      allocate(Z(0:A),E(0:A))
      call calc_Z_spin(beta,A,Z)
      call calc_E_spin(beta,A,Z,E)
-     val = E(A1) + E(A2)
+     val = E(A)
+  case ('Z')
+     allocate(Z(0:A))
+     call calc_Z(beta,A,Z)
+     val = Z(A)
   case ('F')
      allocate(Z(0:A))
      call calc_Z(beta,A,Z)
-     val = (-log(Z(A1)) - log(Z(A2)))/beta
+     val = -log(Z(A))/beta
   case ('F_spin')
      allocate(Z(0:A))
      call calc_Z_spin(beta,A,Z)
-     val = (-log(Z(A1)) - log(Z(A2)))/beta
+     val = -log(Z(A))/beta
   case ('C')
      allocate(CC(0:A))
      call calc_C(beta,A,CC)
-     val = CC(A1) + CC(A2)
+     val = CC(A)
   case default
      write (0,'(a)') "Error: invalid observable "//trim(obs)//"."
      write (0,'(a)') "Type ""free_fermi help"" for more info."
@@ -109,31 +111,28 @@ contains
 
   subroutine print_help()
     implicit none
-    write (6,'(a)') 'ffree: Calculate canonical-ensemble thermodynamic observables for two species'
+    write (6,'(a)') 'ffree: Calculate canonical-ensemble thermodynamic observables for a single species'
     write (6,'(a)') '       of noninteracting fermions in a harmonic trap.'
     write (6,'(a)') ''
-    write (6,'(a)') 'Usage: ffree <obs> <A1> <A2> <beta>'
+    write (6,'(a)') 'Usage: ffree <obs> <A> <beta>'
     write (6,'(a)') ''
     write (6,'(a)') 'where the parameters are:'
     write (6,'(a)') ''
     write (6,'(a)') '  <obs>         Observable (or "help" for this page)'
-    write (6,'(a)') '  <A1>, <A2>    Number of particles for species 1 & 2'
+    write (6,'(a)') '  <A1>          Number of particles'
     write (6,'(a)') '  <beta>        Inverse temperature [units of 1/(hbar * omega)]'
     write (6,'(a)') ''
     write (6,'(a)') 'Observables: '
     write (6,'(a)') ''
-    write (6,'(a)') '  H            Energy, canonical ensemble'
+    write (6,'(a)') '  E            Energy, canonical ensemble'
     write (6,'(a)') '  C            Heat capacity, canonical ensemble'
     write (6,'(a)') '  F            Free energy, canonical ensemble'
-    write (6,'(a)') '  H_spin       Energy, canonical ensemble, w/ spin'
+    write (6,'(a)') '  E_spin       Energy, canonical ensemble, w/ spin'
     write (6,'(a)') '  F_spin       Free energy, canonical ensemble, w/ spin'
     write (6,'(a)') ''
     write (6,'(a)') 'Notes:'
-    write (6,'(a)') '  The calculations are done for a system of two species of noninteracting fermions'
+    write (6,'(a)') '  The calculations are done for a system of noninteracting fermions'
     write (6,'(a)') '  moving in a trap of frequency omega.'
-    write (6,'(a)') ''
-    write (6,'(a)') '  Because the particles are noninteracting, the partition function factorizes,'
-    write (6,'(a)') '  and the energy of the system is simply the sum of the energy for each species.'
     write (6,'(a)') ''
     write (6,'(a)') '  By default the fermions do not have a spin degree of freedom. The H_spin and F_spin'
     write (6,'(a)') '  observables, however, do include a spin degree of freedom for each species.'
