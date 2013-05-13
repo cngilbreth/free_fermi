@@ -1,8 +1,8 @@
-# Noninteraction fermions in a harmonic trap
+# Noninteracting fermions in a harmonic trap
 
 This project contains several codes for calculating thermodynamic properties of
 noninteracting fermions in a harmonic trap in the *canonical ensemble* (of fixed
-numbers of particles).
+numbers of particles) and the grand-canonical ensemble.
 
 The main file is free_fermi.f90, which utilizes an arbitrary-precision
 arithmetic library contained in the files mpfun90.f90 and mpmod90.f90. 
@@ -15,7 +15,7 @@ free_fermi.f90 contains routines for calculating:
 
 It has been tested by doing the calculations in two ways. First, free_fermi.f90
 utilizes arbitrary precision arithmetic and a set for recursive formulas based on
-the paper J. Chem. Phys. *98*, 2484 (1993).
+the paper J. Chem. Phys. *98*, 2484 (1993). 
 
 Second, free_fermi_proj.f90 does the same calculations (most of them) using a
 particle-number projection method via numerical integration. The results for
