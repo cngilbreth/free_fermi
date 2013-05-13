@@ -22,7 +22,7 @@ particle-number projection method via numerical integration. The results for
 reasonable numbers of particles (<= 80 or so) are identical to the recursive
 method. (Everything but the heat capacity has been checked in this way.)
 
-Finally, free_fermi_gc.f90 contains some routines for calculaing thermodynamic
+Finally, free_fermi_gc.f90 contains some routines for calculating thermodynamic
 quantities in the *grand-canonical ensemble*.
 
 
