@@ -31,9 +31,19 @@
 program free_fermi_proj
   implicit none
 
-  integer, parameter :: rk = kind(1d0)
+  integer,  parameter :: rk = kind(1d0)
+
+  ! PHYSICAL PARAMETERS
+  integer, parameter :: spin_degen = 1 ! Spin degeneracy
+  integer, parameter :: d = 3          ! Dimension of space (don't change!)
+
+  ! NUMERICAL PARAMETERS
+  integer,  parameter :: nreg = 128    ! Number of integration regions
+
+  ! MISC PARAMETERS
+  real(rk), parameter :: pi=3.141592653589793_rk
   character(len=*), parameter :: fmt = '(es15.8)'
-  real(rk), parameter :: pi=3.141592653589793d0
+
 
   ! Beta: inverse temperature (1/T), with T in units of hbar * ω.
   real(rk) :: beta
@@ -42,11 +52,7 @@ program free_fermi_proj
   ! Misc. variables
   character(len=256) :: buf
   character(len=32)  :: obs
-  real(rk) :: val, Z
-
-  ! PHYSICAL PARAMETERS
-  integer, parameter :: spin_degen = 1 ! Spin degeneracy
-  integer, parameter :: d = 3          ! Dimension of space (don't change!)
+  real(rk) :: val, lnZ
 
   if (command_argument_count() .lt. 3) then
      call print_help()
@@ -63,16 +69,14 @@ program free_fermi_proj
   select case (obs)
   case ('mu')
      call find_mu(beta,A,val)
-  case ('Z')
-     call calc_Z(beta,A,val)
   case ('lnZ')
      call calc_lnZ(beta,A,val)
   case ('F')
      call calc_lnZ(beta,A,val)
      val = -val/beta
   case ('E')
-     call calc_Z(beta,A,Z)
-     call calc_E(beta,A,Z,val)
+     call calc_lnZ(beta,A,lnZ)
+     call calc_E(beta,A,lnZ,val)
   case default
      write (0,'(a)') "Error: invalid observable "//trim(obs)//"."
      write (0,'(a)') "Type ""free_fermi help"" for more info."
@@ -129,8 +133,8 @@ contains
     integer :: i, max_iterations
 
     ! Bounds: μ ∈ [xlb,xub]
-    xlb = -200.d0
-    xub = 200.d0
+    xlb = -200._rk
+    xub = 200._rk
 
     ! "exponent" gives logarithm base 2
     max_iterations = exponent((xub - xlb)/x_accuracy) + 1
@@ -138,14 +142,14 @@ contains
 
     flb = calc_Nmu(beta,xlb) - N
     fub = calc_Nmu(beta,xub) - N
-    if (.not. flb*fub < 0.d0) stop "find_mu: Zero not properly bracketed"
+    if (.not. flb*fub < 0._rk) stop "find_mu: Zero not properly bracketed"
 
     ! Flip sign of function if necessary to make it increasing
-    s = merge(1.d0,-1.d0,fub > 0.d0)
+    s = merge(1._rk,-1._rk,fub > 0._rk)
 
     do i=1,max_iterations
        ! Try the midpoint in [xlb,xub]
-       xmid = (xlb + xub) * 0.5d0
+       xmid = (xlb + xub) * 0.5_rk
        fmid = s*(calc_Nmu(beta,xmid) - N)
        ! Check for solution
        if (abs(fmid) <= y_accuracy .and. &
@@ -154,7 +158,7 @@ contains
           goto 10
        end if
        ! Decrease interval
-       if (fmid <= 0.d0) then
+       if (fmid <= 0._rk) then
           xlb = xmid
        else
           xub = xmid
@@ -168,7 +172,7 @@ contains
     !   2. abs(xub - xlb) < x_accuracy
     !   3. sign(f(xlb)) .ne. sign(f(xub))
   end subroutine find_mu
-       
+
 
   function calc_Nmu(beta,mu) result(nmu)
     implicit none
@@ -178,55 +182,22 @@ contains
     real(rk) :: p, term
     integer :: k
 
-    nmu = 0.d0
+    nmu = 0._rk
     k = 0
     do
-       p = exp(beta * (k + 1.5d0 - mu))
-       term = 1.d0/(1.d0 + p) * degen(k)
-       if (abs(term) .lt. epsilon(1d0)) exit
+       p = exp(beta * (k + 1.5_rk - mu))
+       term = 1._rk/(1._rk + p) * degen(k)
+       if (abs(term) .lt. epsilon(1._rk)) exit
        nmu = nmu + term
        k = k + 1
     end do
   end function calc_Nmu
 
 
-  subroutine calc_Z(beta,A,Z)
-    ! Calculate the canonical partition functions for N free fermions in
-    ! a d-dimensional harmonic trap.
-    ! Notes:
-    !   Z = Tr_N exp(-β h)
-    !     = [1/2π] * ∫dφ exp(-i φ N) det(1 + exp(-β h) exp(i φ))
-    implicit none
-    real(rk), intent(in) :: beta
-    integer,  intent(in) :: A
-    real(rk), intent(out) :: Z
-
-    real(rk), parameter :: lb = 0.d0, ub = 2.d0*pi
-    integer,  parameter :: nreg = 128
-
-    complex(rk) :: sum
-    real(rk) :: phi, dphi, mu
-    integer :: i
-
-    call find_mu(beta,A,mu)
-
-    ! Numerical integration -- trapezoidal
-    dphi = (ub - lb)/nreg
-    phi = lb
-    sum = trgc_phi(beta,mu,A,phi) * dphi/2
-    do i=1,nreg-1
-       phi = phi + dphi
-       sum = sum + trgc_phi(beta,mu,A,phi)*dphi
-    end do
-    sum = sum + trgc_phi(beta,mu,A,ub) * dphi/2
-
-    Z = real(sum) / (2*pi)     
-  end subroutine calc_Z
-
 
   subroutine calc_lnZ(beta,A,lnZ)
-    ! Calculate the natural logarithm of the *canonical* partition functions for N
-    ! free fermions in a d-dimensional harmonic trap.
+    ! Calculate the natural logarithm of the *canonical* partition functions for
+    ! N free fermions in a d-dimensional harmonic trap.
     ! Input:
     !   beta:  Inverse temperature
     !   mu:    Chemical potential
@@ -237,14 +208,14 @@ contains
     ! Notes:
     !   1. Uses particle-number-projection via numerical integration
     !   2. Exponents in this calculation can become quite large and positive or
-    !      large and negative. This version works with logs as far as possible.
+    !      large and negative. This version works with logs as far as possible,
+    !      which is necessary to prevent over/underflow.
     implicit none
     real(rk), intent(in) :: beta
     integer,  intent(in) :: A
     real(rk), intent(out) :: lnZ
 
     real(rk), parameter :: lb = 0._rk, ub = 2._rk * pi
-    integer,  parameter :: nreg = 128
 
     complex(rk) :: lsum, lvals(0:nreg)
     real(rk) :: phi, dphi, mu, ldphi
@@ -278,38 +249,6 @@ contains
 
 
 
-  function trgc_phi(beta,mu,A,phi) result(tr)
-    ! Canonical partition function with some additional phase/scaling factors.
-    ! Input:
-    !   beta:  Inverse temperature
-    !   mu:    Chemical potential
-    !   A:     Number of particles
-    !   phi:   Angle in range 0 ≤ phi ≤ 2π
-    ! Return value:
-    !   trgc = exp(-iφA - βμA) det(1 + exp(-βh) exp(iφ + βμ))
-    implicit none
-    real(rk), intent(in) :: beta,mu,phi
-    integer, intent(in) :: A
-    complex(rk) :: tr
-
-    complex(rk) :: r, term
-    integer :: m
-
-    term = exp(-beta * (1.5d0 - mu)) * exp((0.d0,1.d0) * phi)
-    r = exp(-beta)
-    tr = 1.d0
-    m = 0
-    do
-       if (abs(term) .lt. epsilon(1d0)) exit
-       tr = tr * (1.d0 + term)**(degen(m))
-       term = term * r
-       m = m + 1
-    end do
-    tr = exp(-(0.d0,1.d0) * phi * A - beta * mu * A) * tr
-  end function trgc_phi
-
-
-
   function lntrgc_phi(beta,mu,A,phi) result(lntr)
     ! Log of the canonical partition function with some additional phase/scaling
     ! factors.
@@ -329,22 +268,91 @@ contains
     integer :: m
 
     ! Initially, term ~ exp(beta * A), which can get large.
-    lnterm = -beta * 1.5d0 +  (0.d0,1.d0) * phi + beta * mu
-    lntr = 0.d0
+    lnterm = -beta * 1.5_rk +  (0._rk,1._rk) * phi + beta * mu
+    lntr = 0._rk
     m = 0
     do
-       ! lnterm = -beta * (m + 1.5d0 - mu) +  (0.d0,1.d0) * phi
-       ! log[(1 + term)**degen(m)]
+       ! lnterm = -beta * (m + 1.5_rk - mu) +  (0._rk,1._rk) * phi
+       ! dlntr = log[(1 + term)**degen(m)]
        dlntr = zlog1pe(lnterm) * degen(m)
        if (abs(dlntr) .lt. abs(lntr) * epsilon(1._rk)) exit
        lntr = lntr + dlntr
        lnterm = lnterm - beta
        m = m + 1
-       ! lnterm = -beta * 1.5d0 * m +  (0.d0,1.d0) * phi + beta * mu
     end do
-    lntr = lntr - (0.d0,1.d0) * phi * A - beta * mu * A
+    lntr = lntr - (0._rk,1._rk) * phi * A - beta * mu * A
   end function lntrgc_phi
 
+
+  subroutine calc_E(beta,A,lnZ,E)
+    ! Calculate the canonical energy for N free fermions in a d-dimensional
+    ! harmonic trap.
+    ! Notes:
+    !   E = Tr_N [exp(-β h) h]/Z
+    !     = 1/(2π Z) * ∫dφ exp(-iφA - βμ) Tr[exp(-βh) h exp(iφ + βμ)]
+    implicit none
+    real(rk), intent(in) :: beta
+    integer,  intent(in) :: A
+    real(rk), intent(in) :: lnZ
+    real(rk), intent(out) :: E
+
+    real(rk), parameter :: lb = 0._rk, ub = 2._rk*pi
+    integer,  parameter :: nreg = 128
+
+    complex(rk) :: sum
+    real(rk) :: phi, dphi, mu
+    integer :: i
+
+    call find_mu(beta,A,mu)
+
+    ! Numerical integration -- trapezoidal
+    dphi = (ub - lb)/nreg
+    phi = lb
+    sum = exp(lntrh_phi(beta,mu,A,phi)-lnZ) * dphi/2
+    do i=1,nreg-1
+       phi = phi + dphi
+       sum = sum + exp(lntrh_phi(beta,mu,A,phi)-lnZ)*dphi
+    end do
+    sum = sum + exp(lntrh_phi(beta,mu,A,ub)-lnZ) * dphi/2
+
+    E = real(sum) / (2*pi)
+  end subroutine calc_E
+
+
+
+  function lntrh_phi(beta,mu,A,phi) result(lntr)
+    ! Compute
+    !  ln[<h>(φ)] = -iφA - βμA + ln Tr(exp[-β(h - μ) + iφ] h)
+    !          = -iφA - βμA
+    !              + ln {Tr(exp[-β(h - μ) + iφ] h) / Tr(exp[-β(h - μ) + iφ])}
+    !              + ln Tr(exp[-β(h - μ) + iφ]
+    !          = -iφA - βμA
+    !              + ln {∑_k g_k ϵ_k/(1 + exp[β(h - μ) - iφ])}
+    !              + ln Tr(exp[-β(h - μ) + iφ].
+    implicit none
+    real(rk), intent(in) :: beta,mu,phi
+    integer,  intent(in) :: A
+
+    integer :: k
+    complex(rk) :: tr, fac, term, lntr
+    real(rk) :: r
+
+    ! The term for the energy is always reasonable in magnitude
+    fac = exp(beta * (1.5_rk - mu) - (0._rk,1._rk)*phi)
+    k = 0; tr = 0; r = exp(beta)
+    do
+       term = 1._rk/(1._rk + fac) * degen(k) * (k + 1.5_rk)
+       if (abs(term) .lt. epsilon(1._rk)) exit
+       tr = tr + term
+       fac = fac * r
+       k = k + 1
+    end do
+    ! Partition function must be treated as a log
+    lntr = log(tr) + lntrgc_phi(beta,mu,A,phi)
+  end function lntrh_phi
+
+
+  ! ** MATHEMATICAL ROUTINES ***************************************************
 
 
   function zlogepe(x,y)
@@ -353,7 +361,7 @@ contains
     !   x, y: Complex
     ! Output:
     !   As above.
-    ! TODO: Prove numeric properties
+    ! TODO: Prove numeric properties?
     implicit none
     complex(rk), intent(in) :: x,y
     complex(rk) :: zlogepe
@@ -366,7 +374,6 @@ contains
        zlogepe = y + zlog1pe(x-y)
     end if
   end function zlogepe
-
 
 
   function zlog1pe(z)
@@ -434,70 +441,4 @@ contains
   end function zlog1p
 
 
-  subroutine calc_E(beta,A,Z,E)
-    ! Calculate the canonical energy for N free fermions in a d-dimensional
-    ! harmonic trap.
-    ! Notes:
-    !   E = Tr_N [exp(-β h) h]/Z
-    !     = 1/(2π Z) * ∫dφ exp(-iφA - βμ) Tr[exp(-βh) h exp(iφ + βμ)]
-    implicit none
-    real(rk), intent(in) :: beta
-    integer,  intent(in) :: A
-    real(rk), intent(in) :: Z
-    real(rk), intent(out) :: E
-
-    real(rk), parameter :: lb = 0.d0, ub = 2.d0*pi
-    integer,  parameter :: nreg = 128
-
-    complex(rk) :: sum
-    real(rk) :: phi, dphi, mu
-    integer :: i
-
-    call find_mu(beta,A,mu)
-
-    ! Numerical integration -- trapezoidal
-    dphi = (ub - lb)/nreg
-    phi = lb
-    sum = trh_phi(beta,mu,A,phi) * dphi/2
-    do i=1,nreg-1
-       phi = phi + dphi
-       sum = sum + trh_phi(beta,mu,A,phi)*dphi
-    end do
-    sum = sum + trh_phi(beta,mu,A,ub) * dphi/2
-
-    E = real(sum) / (2*pi) / Z     
-  end subroutine calc_E
-
-
-
-  function trh_phi(beta,mu,A,phi) result(tr)
-    ! Compute
-    !   <h>(φ) = exp(-iφA - βμA) Tr(exp[-β(h - μ) + iφ] h)
-    !          = exp(-iφA - βμA) 
-    !              * {Tr(exp[-β(h - μ) + iφ] h) / Tr(exp[-β(h - μ) + iφ])} 
-    !              * Tr(exp[-β(h - μ) + iφ]
-    !          = exp(-iφA - βμA) 
-    !              * {∑_k g_k ϵ_k/(1 + exp[β(h - μ) - iφ])} 
-    !              * Tr(exp[-β(h - μ) + iφ].
-    implicit none
-    real(rk), intent(in) :: beta,mu,phi
-    integer,  intent(in) :: A
-
-    integer :: k
-    complex(rk) :: tr, fac, term
-    real(rk) :: r
-
-    fac = exp(beta * (1.5d0 - mu) - (0.d0,1.d0)*phi)
-    k = 0; tr = 0; r = exp(beta)
-    do
-       term = 1.d0/(1.d0 + fac) * degen(k) * (k + 1.5d0)
-       if (abs(term) .lt. epsilon(1d0)) exit
-       tr = tr + term
-       fac = fac * r
-       k = k + 1
-    end do
-    tr = tr * trgc_phi(beta,mu,A,phi)
-  end function trh_phi
-
-  
 end program free_fermi_proj
