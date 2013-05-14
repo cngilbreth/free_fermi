@@ -42,7 +42,7 @@ program free_fermi
   implicit none
 
   integer, parameter :: rk = selected_real_kind(p=15)
-  integer, parameter :: internal_precision = 200
+  integer, parameter :: internal_precision = 1000
   integer, parameter :: d = 3 ! dimension
   character(len=*), parameter :: fmt = '(es15.8)'
 

@@ -65,9 +65,11 @@ program free_fermi_proj
      call find_mu(beta,A,val)
   case ('Z')
      call calc_Z(beta,A,val)
+  case ('lnZ')
+     call calc_lnZ(beta,A,val)
   case ('F')
-     call calc_Z(beta,A,val)
-     val = -log(val)/beta
+     call calc_lnZ(beta,A,val)
+     val = -val/beta
   case ('E')
      call calc_Z(beta,A,Z)
      call calc_E(beta,A,Z,val)
@@ -222,15 +224,69 @@ contains
   end subroutine calc_Z
 
 
+  subroutine calc_lnZ(beta,A,lnZ)
+    ! Calculate the natural logarithm of the *canonical* partition functions for N
+    ! free fermions in a d-dimensional harmonic trap.
+    ! Input:
+    !   beta:  Inverse temperature
+    !   mu:    Chemical potential
+    ! Output:
+    !   The natural logarithm log(Z) of Z
+    !      Z = Tr_N exp(-β h)
+    !        = [1/2π] * ∫dφ exp(-i φ N) det(1 + exp(-β h) exp(i φ))
+    ! Notes:
+    !   1. Uses particle-number-projection via numerical integration
+    !   2. Exponents in this calculation can become quite large and positive or
+    !      large and negative. This version works with logs as far as possible.
+    implicit none
+    real(rk), intent(in) :: beta
+    integer,  intent(in) :: A
+    real(rk), intent(out) :: lnZ
+
+    real(rk), parameter :: lb = 0._rk, ub = 2._rk * pi
+    integer,  parameter :: nreg = 128
+
+    complex(rk) :: lsum, lvals(0:nreg)
+    real(rk) :: phi, dphi, mu, ldphi
+    integer :: i
+
+    call find_mu(beta,A,mu)
+
+    dphi = (ub - lb)/nreg
+    ! Calculate log of integrand values
+    phi = lb
+    lvals(0) = lntrgc_phi(beta,mu,A,phi)
+    do i=1,nreg-1
+       phi = dphi*i
+       lvals(i) = lntrgc_phi(beta,mu,A,phi)
+    end do
+    lvals(nreg) = lntrgc_phi(beta,mu,A,ub)
+
+    ! Integrate ∫exp(log(f(phi))) dphi
+    ldphi = log(dphi)
+    ! lsum = log(∑ vals(i) * (phi(i+1)-phi(i)))
+    !      = log(vals(0)*dphi/2 + ∑ vals(i)*dphi + vals(nreg)*dphi/2)
+    lsum = lvals(0) + log(dphi/2._rk)
+    do i=1,nreg-1
+       ! logepe(lx,ly) = log(exp(lx) + exp(ly)) = log(x + y)
+       lsum = zlogepe(lsum,lvals(i)+ldphi)
+    end do
+    lsum = zlogepe(lsum,lvals(nreg)+log(dphi/2._rk))
+
+    lnz = real(lsum - log(2._rk * pi))
+  end subroutine calc_lnZ
+
+
 
   function trgc_phi(beta,mu,A,phi) result(tr)
+    ! Canonical partition function with some additional phase/scaling factors.
     ! Input:
     !   beta:  Inverse temperature
     !   mu:    Chemical potential
     !   A:     Number of particles
-    ! Output:
-    !   Return value:
-    !     trgc = exp(-iφA - βμA) det(1 + exp(-βh) exp(iφ + βμ))
+    !   phi:   Angle in range 0 ≤ phi ≤ 2π
+    ! Return value:
+    !   trgc = exp(-iφA - βμA) det(1 + exp(-βh) exp(iφ + βμ))
     implicit none
     real(rk), intent(in) :: beta,mu,phi
     integer, intent(in) :: A
@@ -251,6 +307,131 @@ contains
     end do
     tr = exp(-(0.d0,1.d0) * phi * A - beta * mu * A) * tr
   end function trgc_phi
+
+
+
+  function lntrgc_phi(beta,mu,A,phi) result(lntr)
+    ! Log of the canonical partition function with some additional phase/scaling
+    ! factors.
+    ! Input:
+    !   beta:  Inverse temperature
+    !   mu:    Chemical potential
+    !   A:     Number of particles
+    !   phi:   Angle in range 0 ≤ phi ≤ 2π
+    ! Return value:
+    !   lntrgc = log[ exp(-iφA - βμA) det(1 + exp(-βh) exp(iφ + βμ)) ]
+    implicit none
+    real(rk), intent(in) :: beta,mu,phi
+    integer, intent(in) :: A
+    complex(rk) :: lntr, dlntr
+
+    complex(rk) :: lnterm
+    integer :: m
+
+    ! Initially, term ~ exp(beta * A), which can get large.
+    lnterm = -beta * 1.5d0 +  (0.d0,1.d0) * phi + beta * mu
+    lntr = 0.d0
+    m = 0
+    do
+       ! lnterm = -beta * (m + 1.5d0 - mu) +  (0.d0,1.d0) * phi
+       ! log[(1 + term)**degen(m)]
+       dlntr = zlog1pe(lnterm) * degen(m)
+       if (abs(dlntr) .lt. abs(lntr) * epsilon(1._rk)) exit
+       lntr = lntr + dlntr
+       lnterm = lnterm - beta
+       m = m + 1
+       ! lnterm = -beta * 1.5d0 * m +  (0.d0,1.d0) * phi + beta * mu
+    end do
+    lntr = lntr - (0.d0,1.d0) * phi * A - beta * mu * A
+  end function lntrgc_phi
+
+
+
+  function zlogepe(x,y)
+    ! Compute log(exp(x) + exp(y)) accurately.
+    ! Input:
+    !   x, y: Complex
+    ! Output:
+    !   As above.
+    ! TODO: Prove numeric properties
+    implicit none
+    complex(rk), intent(in) :: x,y
+    complex(rk) :: zlogepe
+
+    ! We try to minimize cancellation in the sum here.
+    ! Note real(zlog1pe(...)) is always positive.
+    if (real(x) > real(y)) then
+       zlogepe = x + zlog1pe(y-x)
+    else
+       zlogepe = y + zlog1pe(x-y)
+    end if
+  end function zlogepe
+
+
+
+  function zlog1pe(z)
+    ! Compute log(1 + exp(z)), allowing for large |z|, so that exp(z) does not
+    ! overflow.
+    ! Input:
+    !   z:   Complex
+    ! Output:
+    !   log(1 + exp(z)), as above.
+    ! Notes:
+    !   Currently this routine does not normalize the imaginary part.
+    !   TODO: Normalize the imaginary part ω s.t. -π ≤ ω ≤ π.
+    implicit none
+    complex(rk), intent(in) :: z
+    complex(rk) :: zlog1pe
+
+    if (real(z) > log(1/epsilon(1._rk))) then
+       ! |exp(z)| is so large that adding 1 does not affect the result
+       zlog1pe = z
+    else if (real(z) > -0.5_rk) then
+       ! |exp(z)| ≳ 0.6, but not too large
+       zlog1pe = log(1+exp(z))
+    else if (real(z) > log(epsilon(1._rk))) then
+       ! |exp(z)| ≲ 0.6, but not too small
+       zlog1pe = zlog1p(exp(z))
+    else
+       ! |exp(z)| is so tiny only the first term in the Taylor series of log(1+x)
+       ! is significant to machine precision.
+       zlog1pe = exp(z)
+    end if
+  end function zlog1pe
+
+
+  pure function zlog1p(z)
+    ! Compute log(1+z), taking special care for the case |z| << 1 to avoid loss
+    ! of precision.
+    ! Inputs:
+    !   z:  Any complex number
+    ! Outputs:
+    !   return value:  log(1+z)
+    ! Remark:
+    !   Basically accurate to machine precision.
+    implicit none
+    complex*16, intent(in) :: z
+    complex*16 :: zlog1p
+
+    integer    :: n
+    complex*16 :: zlog1p_prev, z1
+
+    if (abs(z) < 0.5_rk) then
+       ! Use Taylor series
+       z1 = -z * z
+       n  = 2
+       zlog1p_prev = z
+       zlog1p = z + z1/2
+       do while (zlog1p .ne. zlog1p_prev)
+          z1 = -z * z1
+          n  = n + 1
+          zlog1p_prev = zlog1p
+          zlog1p = zlog1p + z1/n
+       end do
+    else
+       zlog1p = log(1+z)
+    end if
+  end function zlog1p
 
 
   subroutine calc_E(beta,A,Z,E)
