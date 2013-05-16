@@ -123,6 +123,8 @@ contains
     !   k:   Integer, index of kth energy level (k=0,1,2,...)
     ! Output:
     !   ek:  Energy of kth energy level for d-dimensional harmonic oscillator.
+    ! Notes:
+    !   The degeneracy of this level should be returned by degen(k).
     implicit none
     integer, intent(in) :: k
     real(rk) :: ek
@@ -159,7 +161,9 @@ contains
   end function degen
 
 
+  ! ** Chemical potential ******************************************************
 
+  ! (This is used to stabilize the Fourier sum for particle-number projection)
 
   subroutine find_mu(beta,N,mu)
     implicit none
@@ -180,7 +184,7 @@ contains
     xlb = -200._rk
     xub = 200._rk
 
-    ! "exponent" gives logarithm base 2
+    ! "exponent" gives integer logarithm base 2
     max_iterations = exponent((xub - xlb)/x_accuracy) + 1
     max_iterations = max_iterations * 2
 
@@ -237,6 +241,8 @@ contains
     end do
   end function calc_Nmu
 
+
+  ! ** Partition function ******************************************************
 
 
   subroutine calc_lnZ(beta,A,lnZ)
