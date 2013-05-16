@@ -1,7 +1,5 @@
 ! free_fermi_proj.f90: Code for calculating canonical thermodynamic quantities
 ! for free fermions in a harmonic trap of arbitrary dimension.
-! This version uses particle number projection, and is therefore most suitable for
-! low temperatures.
 ! http://infty.us/free_fermi/free_fermi.html
 ! v1.0, March 2013
 !
@@ -24,10 +22,6 @@
 ! LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 ! OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 ! SOFTWARE.
-!
-! Notes:
-!
-! This version originally written just as a check against free_fermi.f90.
 program free_fermi_proj
   implicit none
 
@@ -82,7 +76,7 @@ program free_fermi_proj
      call calc_lnZ(beta,A,lnZ)
      call calc_E(beta,A,lnZ,E)
      call calc_C(beta,A,lnZ,E,val)
-     write (*,*) "Note: this calculation is not correct"
+     write (*,*) "#Note: this calculation is not correct"
   case ('nk')
      if (command_argument_count() .ne. 4) stop "must specify number of levels for this command"
      call getarg(4,buf); read(buf,*) nlevels
@@ -235,7 +229,7 @@ contains
     nmu = 0._rk
     k = 0
     do
-       p = exp(beta * (k + 1.5_rk - mu))
+       p = exp(beta * (ek(k) - mu))
        term = 1._rk/(1._rk + p) * degen(k)
        if (abs(term) .lt. epsilon(1._rk)) exit
        nmu = nmu + term
@@ -318,16 +312,14 @@ contains
     integer :: m
 
     ! Initially, term ~ exp(beta * A), which can get large.
-    lnterm = -beta * 1.5_rk +  (0._rk,1._rk) * phi + beta * mu
     lntr = 0._rk
     m = 0
     do
-       ! lnterm = -beta * (m + 1.5_rk - mu) +  (0._rk,1._rk) * phi
+       lnterm = -beta * (ek(m) - mu) + (0._rk,1._rk) * phi
        ! dlntr = log[(1 + term)**degen(m)]
        dlntr = zlog1pe(lnterm) * degen(m)
        if (abs(dlntr) .lt. abs(lntr) * epsilon(1._rk)) exit
        lntr = lntr + dlntr
-       lnterm = lnterm - beta
        m = m + 1
     end do
     lntr = lntr - (0._rk,1._rk) * phi * A - beta * mu * A
@@ -387,16 +379,14 @@ contains
 
     integer :: k
     complex(rk) :: tr, fac, term, lntr
-    real(rk) :: r
 
     ! The term for the energy is always reasonable in magnitude
-    fac = exp(beta * (1.5_rk - mu) - (0._rk,1._rk)*phi)
-    k = 0; tr = 0; r = exp(beta)
+    k = 0; tr = 0
     do
-       term = 1._rk/(1._rk + fac) * degen(k) * (k + 1.5_rk)
+       fac = exp(beta * (ek(k) - mu) - (0._rk,1._rk)*phi)
+       term = 1._rk/(1._rk + fac) * degen(k) * ek(k)
        if (abs(term) .lt. epsilon(1._rk)*abs(tr)) exit
        tr = tr + term
-       fac = fac * r
        k = k + 1
     end do
     ! Partition function must be treated as a log
@@ -458,28 +448,25 @@ contains
 
     integer :: k
     complex(rk) :: tr, fac, term, lntr
-    real(rk) :: r
 
     ! Direct term
-    fac = exp(beta * (1.5_rk - mu) - (0._rk,1._rk)*phi)
-    k = 0; tr = 0; r = exp(beta)
+    k = 0; tr = 0
     do
+       fac = exp(beta * (ek(k) - mu) - (0._rk,1._rk)*phi)
        term = 1._rk/(1._rk + fac) * degen(k) * (k + 1.5_rk)
        if (abs(term) .lt. epsilon(1._rk)*abs(tr)) exit
        tr = tr + term
-       fac = fac * r
        k = k + 1
     end do
     tr = (tr)**2
 
     ! Exchange term
-    fac = exp(beta * (1.5_rk - mu) - (0._rk,1._rk)*phi)
-    k = 0; r = exp(beta)
+    k = 0
     do
+       fac = exp(beta * (ek(k) - mu) - (0._rk,1._rk)*phi)
        term = - (1._rk/(1._rk + fac))**2 * degen(k) * (k + 1.5_rk)**2
        if (abs(term) .lt. epsilon(1._rk)*abs(tr)) exit
        tr = tr + term
-       fac = fac * r
        k = k + 1
     end do
 
