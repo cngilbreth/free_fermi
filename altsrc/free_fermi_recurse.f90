@@ -24,7 +24,7 @@
 ! SOFTWARE.
 !
 ! Notes:
-! 
+!
 ! (1) Calculations are performed using a recursion relation method from J. Chem
 ! Phys *98*, 2484 (1993).
 !
@@ -142,7 +142,7 @@ contains
 
 
   type(mp_real) function Sk(beta,k)
-    ! Calculate the 1-particle partition function at inverse 
+    ! Calculate the 1-particle partition function at inverse
     ! temperature k*beta,
     !   S(k) = Σ exp(-beta k ϵ(j))
     ! Where the sum is over all s.p. states j.
@@ -173,7 +173,7 @@ contains
   type(mp_real) function mpcoth(x)
     implicit none
     type(mp_real), intent(in) :: x
-    
+
     mpcoth = 1/tanh(x)
   end function mpcoth
 
