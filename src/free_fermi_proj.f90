@@ -32,21 +32,22 @@ program free_fermi_proj
   integer, parameter :: d = 3          ! Dimension of space (don't change!)
 
   ! NUMERICAL PARAMETERS
-  integer,  parameter :: nreg = 128    ! Number of integration regions
+  integer,  parameter :: nreg = 128        ! Number of integration regions
+  real(rk), parameter :: dT_T = 0.0005_rk  ! ΔT/T for numerical differentiation
 
   ! MISC PARAMETERS
   real(rk), parameter :: pi=3.141592653589793_rk
   character(len=*), parameter :: fmt = 'es15.8'
 
 
-  ! Beta: inverse temperature (1/T), with T in units of hbar * ω.
+  ! Beta: inverse temperature (1/T)
   real(rk) :: beta
   ! Number of particles for first and second species
   integer :: A, nlevels, k
   ! Misc. variables
   character(len=256) :: buf
   character(len=32)  :: obs
-  real(rk) :: val, lnZ, E, np
+  real(rk) :: val, lnZ, E, np, Eplus, Eminus
   real(rk), allocatable :: nk(:)
 
   if (command_argument_count() .lt. 3) then
@@ -73,10 +74,15 @@ program free_fermi_proj
      call calc_lnZ(beta,A,lnZ)
      call calc_E(beta,A,lnZ,val)
   case ('C')
-     call calc_lnZ(beta,A,lnZ)
-     call calc_E(beta,A,lnZ,E)
-     call calc_C(beta,A,lnZ,E,val)
-     write (*,*) "#Note: this calculation is not correct"
+     ! FIXME: Would be preferrable to use <(Ĥ-E)^2> formula
+     ! Numerical differentiation is not so great.
+     call calc_lnZ(beta/(1 + dT_T),A,lnZ)
+     call calc_E(beta/(1 + dT_T),A,lnZ,Eplus)
+     call calc_lnZ(beta/(1 - dT_T),A,lnZ)
+     call calc_E(beta/(1 - dT_T),A,lnZ,Eminus)
+     val = beta*(Eplus - Eminus)/(2*dT_T)
+     write (6,'(es15.4)') val
+     goto 10
   case ('nk')
      if (command_argument_count() .ne. 4) stop "must specify number of levels for this command"
      call getarg(4,buf); read(buf,*) nlevels
@@ -403,6 +409,8 @@ contains
 
   ! ** Heat capacity (DOESN'T WORK) ********************************************
 
+  ! These routines are supposed to implement the heat capacity by calculating
+  ! the variance of the energy. But they are broken at the moment.
 
   subroutine calc_C(beta,A,lnZ,E,C)
     ! Calculate the canonical energy for N free fermions in a d-dimensional
@@ -435,7 +443,7 @@ contains
     end do
     sum = sum + exp(lntrc_phi(beta,mu,A,E,ub)-lnZ) * dphi/2
 
-    C = real(sum) / (2*pi) + E**2 * beta**2
+    C = real(sum) / (2*pi)
   end subroutine calc_C
 
 
@@ -459,14 +467,14 @@ contains
     k = 0; tr = 0
     do
        fac = exp(beta * (ek(k) - mu) - (0._rk,1._rk)*phi)
-       term = 1._rk/(1._rk + fac) * degen(k) * (k + 1.5_rk)
+       term = 1._rk/(1._rk + fac) * degen(k) * (k + 1.5_rk)**2
        if (abs(term) .lt. epsilon(1._rk)*abs(tr)) exit
        tr = tr + term
        k = k + 1
     end do
     tr = (tr)**2
 
-    ! Exchange term
+    ! Exchange terms
     k = 0
     do
        fac = exp(beta * (ek(k) - mu) - (0._rk,1._rk)*phi)
