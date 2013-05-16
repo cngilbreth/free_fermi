@@ -1,9 +1,6 @@
-! free_fermi_proj.f90: Code for calculating canonical thermodynamic quantities
-! for free fermions in a harmonic trap of arbitrary dimension.
-! This version uses particle number projection, and is therefore most suitable for
-! low temperatures.
-! http://infty.us/free_fermi/free_fermi.html
-! v1.0, March 2013
+! free_fermi_gc.f90: Code for calculating grand-canonical thermodynamic
+! quantities for free fermions in a harmonic trap of arbitrary dimension.
+! http://infty.net/free_fermi/free_fermi.html
 !
 ! Copyright (c) 2013 Christopher N. Gilbreth
 !
@@ -25,9 +22,6 @@
 ! OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 ! SOFTWARE.
 !
-! Notes:
-!
-! This version originally written just as a check against free_fermi.f90.
 program free_fermi_gc
   implicit none
 
@@ -62,17 +56,13 @@ program free_fermi_gc
      call find_mu(beta,A,val)
      stop
   case ('W')
-     ! Grand potential
+     ! Grand potential W = U - T S - μ N = - T log(Z)
      call find_mu(beta,A,mu)
      val = -log(trgc(beta,mu))/beta
   case ('F')
-     ! Free energy F = U - T S = -T log(Z) - μ N
+     ! Free energy F = U - T S = -T log(Z) + μ N
      call find_mu(beta,A,mu)
      val = -log(trgc(beta,mu))/beta + mu*A
-  case default
-     write (0,'(a)') "Error: invalid observable "//trim(obs)//"."
-     write (0,'(a)') "Type ""free_fermi help"" for more info."
-     stop
   end select
 
   write (6,fmt) val
