@@ -42,17 +42,18 @@ program free_fermi_proj
 
   ! MISC PARAMETERS
   real(rk), parameter :: pi=3.141592653589793_rk
-  character(len=*), parameter :: fmt = '(es15.8)'
+  character(len=*), parameter :: fmt = 'es15.8'
 
 
   ! Beta: inverse temperature (1/T), with T in units of hbar * ω.
   real(rk) :: beta
   ! Number of particles for first and second species
-  integer :: A
+  integer :: A, nlevels, k
   ! Misc. variables
   character(len=256) :: buf
   character(len=32)  :: obs
-  real(rk) :: val, lnZ
+  real(rk) :: val, lnZ, E, np
+  real(rk), allocatable :: nk(:)
 
   if (command_argument_count() .lt. 3) then
      call print_help()
@@ -77,13 +78,36 @@ program free_fermi_proj
   case ('E')
      call calc_lnZ(beta,A,lnZ)
      call calc_E(beta,A,lnZ,val)
+  case ('C')
+     call calc_lnZ(beta,A,lnZ)
+     call calc_E(beta,A,lnZ,E)
+     call calc_C(beta,A,lnZ,E,val)
+     write (*,*) "Note: this calculation is not correct"
+  case ('nk')
+     if (command_argument_count() .ne. 4) stop "must specify number of levels for this command"
+     call getarg(4,buf); read(buf,*) nlevels
+     allocate(nk(0:nlevels-1))
+     call calc_lnZ(beta,A,lnZ)
+     call calc_nk(beta,A,lnZ,nlevels,nk)
+     write (*,'(a4,tr2,a15,tr2,a15,tr2,a6)') "#  k", "e(k)", "n(e(k))", "degen"
+     E = 0.d0; np = 0.d0
+     do k=0,nlevels-1
+        write (*,'(i4,tr2,'//trim(fmt)//',tr2,'//trim(fmt)//',tr2,i6)') &
+             k, ek(k), nk(k), degen(k)
+        E = E + ek(k) * nk(k) * degen(k)
+        np = np + nk(k) * degen(k)
+     end do
+     write (*,'(a,'//trim(fmt)//')') "# Sum of energies: ", E
+     write (*,'(a,'//trim(fmt)//')') "# Sum of particle numbers: ", np
+     goto 10
   case default
      write (0,'(a)') "Error: invalid observable "//trim(obs)//"."
      write (0,'(a)') "Type ""free_fermi help"" for more info."
      stop
   end select
 
-  write (6,fmt) val
+  write (6,'('//trim(fmt)//')') val
+10 continue
 
 contains
 
@@ -91,30 +115,56 @@ contains
   subroutine print_help()
     implicit none
     write (6,'(a)') 'ffree: Calculate canonical-ensemble thermodynamic observables for'
-    write (6,'(a)') '       noninteracting fermions in a harmonic trap.'
+    write (6,'(a)') '       noninteracting fermions.'
     write (6,'(a)') ''
   end subroutine print_help
 
 
-  integer function degen(n) result(g)
-    ! Degeneracy of oscillator state with n quanta
-    ! g = n * (n + 1) * ... * (n + d - 1) / d!
-    ! I've only checked this formula for d=1,2,3,4. Haven't proved generally.
-    ! Haven't checked the code for d other than 3.
+  ! ** Physical stuff **********************************************************
+
+
+  function ek(k)
+    ! Energy of kth energy level, starting from k=0, in some appropriate units
+    ! Input:
+    !   k:   Integer, index of kth energy level (k=0,1,2,...)
+    ! Output:
+    !   ek:  Energy of kth energy level for d-dimensional harmonic oscillator.
     implicit none
-    integer, intent(in) :: n
+    integer, intent(in) :: k
+    real(rk) :: ek
+
+    ek = k + d/2._rk
+  end function ek
+
+
+  integer function degen(k) result(g)
+    ! Degeneracy of the kth energy level, starting from k=0
+    ! Input:
+    !   k:  Index, k=0,1,2,...
+    ! Output:
+    !   Degeneracy of an oscillator with k quanta of energy.
+    ! Notes:
+    !      g = k * (k + 1) * ... * (k + d - 1) / d!
+    !   I've only checked this formula for d=1,2,3,4. Haven't proved generally.
+    !   Haven't checked the code for d other than 3.
+    implicit none
+    integer, intent(in) :: k
 
     integer :: i
 
+    if (d .gt. 4) stop "Error in degen: need to check formula"
+
     g = 1
     do i=1,d-1
-       g = g * (n + i)
+       g = g * (k + i)
     end do
     do i=2,d-1
        g = g / i
     end do
     g = g * spin_degen
   end function degen
+
+
 
 
   subroutine find_mu(beta,N,mu)
@@ -284,6 +334,9 @@ contains
   end function lntrgc_phi
 
 
+  ! ** Energy ******************************************************************
+
+
   subroutine calc_E(beta,A,lnZ,E)
     ! Calculate the canonical energy for N free fermions in a d-dimensional
     ! harmonic trap.
@@ -319,7 +372,6 @@ contains
   end subroutine calc_E
 
 
-
   function lntrh_phi(beta,mu,A,phi) result(lntr)
     ! Compute
     !  ln[<h>(φ)] = -iφA - βμA + ln Tr(exp[-β(h - μ) + iφ] h)
@@ -342,7 +394,7 @@ contains
     k = 0; tr = 0; r = exp(beta)
     do
        term = 1._rk/(1._rk + fac) * degen(k) * (k + 1.5_rk)
-       if (abs(term) .lt. epsilon(1._rk)) exit
+       if (abs(term) .lt. epsilon(1._rk)*abs(tr)) exit
        tr = tr + term
        fac = fac * r
        k = k + 1
@@ -352,16 +404,175 @@ contains
   end function lntrh_phi
 
 
+
+  ! ** Heat capacity (DOESN'T WORK) ********************************************
+
+
+  subroutine calc_C(beta,A,lnZ,E,C)
+    ! Calculate the canonical energy for N free fermions in a d-dimensional
+    ! harmonic trap.
+    ! Notes:
+    !   E = Tr_N [exp(-β h) h]/Z
+    !     = 1/(2π Z) * ∫dφ exp(-iφA - βμ) Tr[exp(-βh) h exp(iφ + βμ)]
+    implicit none
+    real(rk), intent(in) :: beta
+    integer,  intent(in) :: A
+    real(rk), intent(in) :: lnZ, E
+    real(rk), intent(out) :: C
+
+    real(rk), parameter :: lb = 0._rk, ub = 2._rk*pi
+    integer,  parameter :: nreg = 128
+
+    complex(rk) :: sum
+    real(rk) :: phi, dphi, mu
+    integer :: i
+
+    call find_mu(beta,A,mu)
+
+    ! Numerical integration -- trapezoidal
+    dphi = (ub - lb)/nreg
+    phi = lb
+    sum = exp(lntrc_phi(beta,mu,A,E,phi)-lnZ) * dphi/2
+    do i=1,nreg-1
+       phi = phi + dphi
+       sum = sum + exp(lntrc_phi(beta,mu,A,E,phi)-lnZ)*dphi
+    end do
+    sum = sum + exp(lntrc_phi(beta,mu,A,E,ub)-lnZ) * dphi/2
+
+    C = real(sum) / (2*pi) + E**2 * beta**2
+  end subroutine calc_C
+
+
+  function lntrc_phi(beta,mu,A,E,phi) result(lntr)
+    ! Compute
+    !  ln[<h>(φ)] = -iφA - βμA + ln Tr(exp[-β(h - μ) + iφ] h)
+    !          = -iφA - βμA
+    !              + ln {Tr(exp[-β(h - μ) + iφ] h) / Tr(exp[-β(h - μ) + iφ])}
+    !              + ln Tr(exp[-β(h - μ) + iφ]
+    !          = -iφA - βμA
+    !              + ln {∑_k g_k ϵ_k/(1 + exp[β(h - μ) - iφ])}
+    !              + ln Tr(exp[-β(h - μ) + iφ].
+    implicit none
+    real(rk), intent(in) :: beta,mu,phi,E
+    integer,  intent(in) :: A
+
+    integer :: k
+    complex(rk) :: tr, fac, term, lntr
+    real(rk) :: r
+
+    ! Direct term
+    fac = exp(beta * (1.5_rk - mu) - (0._rk,1._rk)*phi)
+    k = 0; tr = 0; r = exp(beta)
+    do
+       term = 1._rk/(1._rk + fac) * degen(k) * (k + 1.5_rk)
+       if (abs(term) .lt. epsilon(1._rk)*abs(tr)) exit
+       tr = tr + term
+       fac = fac * r
+       k = k + 1
+    end do
+    tr = (tr)**2
+
+    ! Exchange term
+    fac = exp(beta * (1.5_rk - mu) - (0._rk,1._rk)*phi)
+    k = 0; r = exp(beta)
+    do
+       term = - (1._rk/(1._rk + fac))**2 * degen(k) * (k + 1.5_rk)**2
+       if (abs(term) .lt. epsilon(1._rk)*abs(tr)) exit
+       tr = tr + term
+       fac = fac * r
+       k = k + 1
+    end do
+
+    tr = -tr * beta**2
+    ! Partition function must be treated as a log
+    lntr = log(tr) + lntrgc_phi(beta,mu,A,phi)
+  end function lntrc_phi
+
+
+  ! ** Occupations *************************************************************
+
+
+  subroutine calc_nk(beta,A,lnZ,N,nk)
+    ! Calculate the occupation numbers of the first N single-particle states.
+    ! Input:
+    !   beta:  Inverse temperature
+    !   mu:    Chemical potential
+    !   A:     Number of particles
+    !   N:     Number of s.p. states to consider
+    !   phi:   Phase angle for particle-number projection
+    ! Notes:
+    !   This does not include degeneracies. We compute the result for one
+    !   degenerate state in each level.
+    implicit none
+    real(rk), intent(in) :: beta
+    integer,  intent(in) :: A, N
+    real(rk), intent(in) :: lnZ
+    real(rk), intent(out) :: nk(0:N-1)
+
+    real(rk), parameter :: lb = 0._rk, ub = 2._rk*pi
+    integer,  parameter :: nreg = 128
+
+    complex(rk) :: sum(0:N-1)
+    real(rk) :: phi, dphi, mu
+    integer :: i
+
+    call find_mu(beta,A,mu)
+
+    ! Numerical integration -- trapezoidal
+    dphi = (ub - lb)/nreg
+    phi = lb
+    sum = exp(lntrnk_phi(beta,mu,A,N,phi)-lnZ) * dphi/2
+    do i=1,nreg-1
+       phi = phi + dphi
+       sum = sum + exp(lntrnk_phi(beta,mu,A,N,phi)-lnZ)*dphi
+    end do
+    sum = sum + exp(lntrnk_phi(beta,mu,A,N,ub)-lnZ) * dphi/2
+
+    nk = real(sum) / (2*pi)
+  end subroutine calc_nk
+
+
+
+  function lntrnk_phi(beta,mu,A,N,phi) result(lntrnk)
+    ! Compute the log of the numerators of the occupations of the states in the
+    ! first k energy levels:
+    !   log[Tr(exp{-β(h-μ)+iφ} n̂(k))]
+    !     = log[1/(1+exp{β[ϵ(k)-μ]-iφ}) * Tr(exp{-β[ϵ(k)-μ]+iφ})]
+    ! for k=0:N-1.
+    ! Input:
+    !   beta:  Inverse temperature
+    !   mu:    Chemical potential
+    !   A:     Number of particles
+    !   N:     Number of s.p. states to consider
+    !   phi:   Phase angle for particle-number projection
+    ! Notes:
+    !   This does not include degeneracies. We compute the result for one
+    !   degenerate state in each level.
+    implicit none
+    real(rk), intent(in) :: beta,mu,phi
+    integer,  intent(in) :: A, N
+    complex(rk) :: lntrnk(0:N-1)
+
+    integer :: k
+
+    do k=0,N-1
+       ! log[1/(1+exp{β[ϵ(k)-μ]-iφ}) * Tr(exp{-β[ϵ(k)-μ]+iφ})]
+       lntrnk(k) = -zlog1pe(beta * (ek(k) - mu) - (0._rk,1._rk)*phi) &
+            + lntrgc_phi(beta,mu,A,phi)
+    end do
+  end function lntrnk_phi
+
+
+
   ! ** MATHEMATICAL ROUTINES ***************************************************
 
 
   function zlogepe(x,y)
-    ! Compute log(exp(x) + exp(y)) accurately.
+    ! Compute log(exp(x) + exp(y)) avoiding overflow/underflow.
     ! Input:
     !   x, y: Complex
     ! Output:
     !   As above.
-    ! TODO: Prove numeric properties?
     implicit none
     complex(rk), intent(in) :: x,y
     complex(rk) :: zlogepe
@@ -377,8 +588,7 @@ contains
 
 
   function zlog1pe(z)
-    ! Compute log(1 + exp(z)), allowing for large |z|, so that exp(z) does not
-    ! overflow.
+    ! Compute log(1 + exp(z)), avoiding overflow.
     ! Input:
     !   z:   Complex
     ! Output:
