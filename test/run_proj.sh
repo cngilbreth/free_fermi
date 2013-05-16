@@ -2,40 +2,47 @@
 
 PROG=../src/free_fermi_proj
 
-betas=`seq 1.0 1.0 10.0`
-echo $betas
+betas="0.1 1.0 `seq 2.0 2.0 10.0`"
+N=10
 
 echo "#beta       E"
 for beta in $betas; do
     echo -n "$beta   "
-    $PROG E 10 $beta
+    $PROG E $N $beta
 done
 
 #echo ""
 #echo "#beta       C"
 #for beta in $betas; do
 #    echo -n "$beta   "
-#    $PROG C 10 $beta
+#    $PROG C $N $beta
 #done
 
 echo ""
 echo "#beta       F"
 for beta in $betas; do
     echo -n "$beta   "
-    $PROG F 10 $beta
+    $PROG F $N $beta
+done
+
+echo ""
+for beta in $betas; do
+    echo "#beta=$beta"
+    $PROG nk $N $beta 20
+    echo ""
 done
 
 #echo ""
 #echo "#beta     E_spin"
 #for beta in $betas; do
 #    echo -n "$beta   "
-#    $PROG E_spin 10 $beta
+#    $PROG E_spin $N $beta
 #done
 
 #echo ""
 #echo "#beta     F_spin"
 #for beta in $betas; do
 #    echo -n "$beta   "
-#    $PROG F_spin 10 $beta
+#    $PROG F_spin $N $beta
 #done
 
