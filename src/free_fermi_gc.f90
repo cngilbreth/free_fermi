@@ -2,6 +2,10 @@
 ! quantities for free fermions in a harmonic trap of arbitrary dimension.
 ! http://infty.net/free_fermi/free_fermi.html
 !
+! This is a very simple code which currently does not account for overflow or
+! underflow of floating-point numbers, which tends to happen when the number of
+! particles and/or |beta| are large.
+!
 ! Copyright (c) 2013 Christopher N. Gilbreth
 !
 ! Permission is hereby granted, free of charge, to any person obtaining a copy
@@ -72,14 +76,68 @@ contains
 
   subroutine print_help()
     implicit none
-    write (6,'(a)') 'ffree: Calculate canonical-ensemble thermodynamic observables for two species'
-    write (6,'(a)') '       of noninteracting fermions in a harmonic trap.'
+    write (6,'(a)') 'This is the help message'
     write (6,'(a)') ''
   end subroutine print_help
 
 
+  ! ** Physical stuff **********************************************************
+
+
+  function ek(k)
+    ! Energy of kth energy level, starting from k=0, in some appropriate units
+    ! Input:
+    !   k:   Integer, index of kth energy level (k=0,1,2,...)
+    ! Output:
+    !   ek:  Energy of kth energy level for d-dimensional harmonic oscillator.
+    ! Notes:
+    !   The degeneracy of this level should be returned by degen(k).
+    implicit none
+    integer, intent(in) :: k
+    real(rk) :: ek
+
+    ek = k + d/2._rk
+  end function ek
+
+
+  integer function degen(k) result(g)
+    ! Degeneracy of the kth energy level, starting from k=0
+    ! Input:
+    !   k:  Index, k=0,1,2,...
+    ! Output:
+    !   Degeneracy of an oscillator with k quanta of energy.
+    ! Notes:
+    !   Before spin degeneracy,
+    !      g = (k + 1) * ... * (k + d - 1) / (d-1)!
+    !   which is the number of ways to distribute k quanta into d groups,
+    !   including empty groups.
+    implicit none
+    integer, intent(in) :: k
+
+    integer :: i
+
+    g = 1
+    do i=1,d-1
+       g = g * (k + i)
+    end do
+    do i=2,d-1
+       g = g / i
+    end do
+    g = g * spin_degen
+  end function degen
+
+
+  ! ** Chemical potential ******************************************************
+
 
   function calc_Nmu(beta,mu) result(nmu)
+    ! Calculate the thermal expectation of the total number of particles at a
+    ! given chemical potential.
+    ! Input:
+    !   beta:  Inverse temperature
+    !   mu:    Chemical potential
+    ! Output:
+    !   Return value: As above
     implicit none
     real(rk), intent(in) :: beta,mu
     real(rk) :: nmu
@@ -90,9 +148,9 @@ contains
     nmu = 0.d0
     k = 0
     do
-       p = exp(beta * (k + 1.5d0 - mu))
-       term = 1.d0/(1.d0 + p) * (((k+1)*(k+2))/2)
-       if (abs(term) .lt. epsilon(1d0)) exit
+       p = exp(beta * (ek(k) - mu))
+       term = 1.d0/(1.d0 + p) * degen(k)
+       if (abs(term) .lt. abs(nmu)*epsilon(1d0)) exit
        nmu = nmu + term
        k = k + 1
     end do
@@ -100,6 +158,16 @@ contains
 
 
   subroutine find_mu(beta,N,mu)
+    ! Find the chemical potential for A particles at temperature T = 1/beta.
+    ! Input:
+    !   beta:  Inverse temperature
+    !   A:     Number of particles
+    ! Output:
+    !   mu:    Chemical potential
+    ! Notes:
+    !   1. Performs a bisection root-finding method
+    !   2. The bounds xlb and xub may need to be expanded for large numbers of
+    !      particles.
     implicit none
     real(rk),   intent(in)  :: beta
     integer,    intent(in)  :: N
@@ -152,10 +220,12 @@ contains
     ! Postconditions:
     !   1. abs(fmid) <= y_accuracy
     !   2. xmid = (xlb + xub)/2
-    !   2. abs(xub - xlb) < x_accuracy
-    !   3. sign(f(xlb)) .ne. sign(f(xub))
+    !   3. abs(xub - xlb) < x_accuracy
+    !   4. sign(f(xlb)) .ne. sign(f(xub))
   end subroutine find_mu
 
+
+  ! ** Partition function ******************************************************
 
 
   function trgc(beta,mu) result(tr)
@@ -173,17 +243,18 @@ contains
     real(rk) :: tr
 
     real(rk) :: r, term
-    integer :: m
+    integer :: k
 
     term = exp(-beta * (1.5d0 - mu))
     r = exp(-beta)
     tr = 1.d0
-    m = 0
+    k = 0
     do
+       term = exp(-beta * (ek(k) - mu))
        if (abs(term) .lt. epsilon(1d0)) exit
-       tr = tr * (1.d0 + term)**(((m+1)*(m+2))/2)
+       tr = tr * (1.d0 + term)**degen(k)
        term = term * r
-       m = m + 1
+       k = k + 1
     end do
   end function trgc
 

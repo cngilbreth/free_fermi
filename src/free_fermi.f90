@@ -28,7 +28,7 @@ program free_fermi
 
   ! PHYSICAL PARAMETERS
   integer, parameter :: spin_degen = 1 ! Spin degeneracy
-  integer, parameter :: d = 3          ! Dimension of space (don't change!)
+  integer, parameter :: d = 3          ! Dimension of space
 
   ! NUMERICAL PARAMETERS
   integer,  parameter :: nreg = 128        ! Number of integration regions
@@ -145,15 +145,14 @@ contains
     ! Output:
     !   Degeneracy of an oscillator with k quanta of energy.
     ! Notes:
-    !      g = k * (k + 1) * ... * (k + d - 1) / d!
-    !   I've only checked this formula for d=1,2,3,4. Haven't proved generally.
-    !   Haven't checked the code for d other than 3.
+    !   Before spin degeneracy,
+    !      g = (k + 1) * ... * (k + d - 1) / (d-1)!
+    !   which is the number of ways to distribute k quanta into d groups,
+    !   including empty groups.
     implicit none
     integer, intent(in) :: k
 
     integer :: i
-
-    if (d .gt. 4) stop "Error in degen: need to check formula"
 
     g = 1
     do i=1,d-1
@@ -232,8 +231,8 @@ contains
     ! Postconditions:
     !   1. abs(fmid) <= y_accuracy
     !   2. xmid = (xlb + xub)/2
-    !   2. abs(xub - xlb) < x_accuracy
-    !   3. sign(f(xlb)) .ne. sign(f(xub))
+    !   3. abs(xub - xlb) < x_accuracy
+    !   4. sign(f(xlb)) .ne. sign(f(xub))
   end subroutine find_mu
 
 
@@ -257,7 +256,7 @@ contains
     do
        p = exp(beta * (ek(k) - mu))
        term = 1._rk/(1._rk + p) * degen(k)
-       if (abs(term) .lt. nmu*epsilon(1._rk)) exit
+       if (abs(term) .lt. abs(nmu)*epsilon(1._rk)) exit
        nmu = nmu + term
        k = k + 1
     end do
@@ -426,7 +425,7 @@ contains
     do
        fac = exp(beta * (ek(k) - mu) - (0._rk,1._rk)*phi)
        term = 1._rk/(1._rk + fac) * degen(k) * ek(k)
-       if (abs(term) .lt. epsilon(1._rk)*abs(tr)) exit
+       if (abs(term) .lt. abs(tr)*epsilon(1._rk)) exit
        tr = tr + term
        k = k + 1
     end do
