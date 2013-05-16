@@ -50,31 +50,31 @@ program free_fermi
   real(rk), allocatable :: nk(:)
 
   if (command_argument_count() .lt. 3) then
-     call print_help()
-     stop
+     stop "Wrong number of arguments"
   end if
   call getarg(1,obs)
-  if (obs == "help") then
-     call print_help()
-     stop
-  end if
   call getarg(2,buf); read(buf,*) A
   call getarg(3,buf); read(buf,*) beta
 
   select case (obs)
   case ('mu')
+     ! Compute chemical potential
      call find_mu(beta,A,val)
   case ('lnZ')
+     ! Compute log of partition function
      call calc_lnZ(beta,A,val)
   case ('F')
+     ! Compute free energy
      call calc_lnZ(beta,A,val)
      val = -val/beta
   case ('E')
+     ! Compute thermal energy
      call calc_lnZ(beta,A,lnZ)
      call calc_E(beta,A,lnZ,val)
   case ('C')
-     ! FIXME: Would be preferrable to use <(Ĥ-E)^2> formula
-     ! Numerical differentiation is not so great.
+     ! Compute heat capacity
+     ! FIXME: Would be preferrable to use <(Ĥ-E)^2> formula rather than
+     ! numerical differentiation.
      call calc_lnZ(beta/(1 + dT_T),A,lnZ)
      call calc_E(beta/(1 + dT_T),A,lnZ,Eplus)
      call calc_lnZ(beta/(1 - dT_T),A,lnZ)
@@ -83,6 +83,7 @@ program free_fermi
      write (6,'(es15.4)') val
      goto 10
   case ('nk')
+     ! Compute single-particle state occupations
      if (command_argument_count() .ne. 4) stop "must specify number of levels for this command"
      call getarg(4,buf); read(buf,*) nlevels
      allocate(nk(0:nlevels-1))
@@ -101,7 +102,6 @@ program free_fermi
      goto 10
   case default
      write (0,'(a)') "Error: invalid observable "//trim(obs)//"."
-     write (0,'(a)') "Type ""free_fermi help"" for more info."
      stop
   end select
 
@@ -111,29 +111,25 @@ program free_fermi
 contains
 
 
-  subroutine print_help()
-    implicit none
-    write (6,'(a)') 'ffree: Calculate canonical-ensemble thermodynamic observables for'
-    write (6,'(a)') '       noninteracting fermions.'
-    write (6,'(a)') ''
-  end subroutine print_help
-
-
-  ! ** Physical stuff **********************************************************
+   ! ** Physical stuff **********************************************************
 
 
   function ek(k)
-    ! Energy of kth energy level, starting from k=0, in some appropriate units
+    ! Energy of kth single-particle energy level, starting from k=0, in some
+    ! appropriate units.
     ! Input:
     !   k:   Integer, index of kth energy level (k=0,1,2,...)
     ! Output:
-    !   ek:  Energy of kth energy level for d-dimensional harmonic oscillator.
+    !   ek:  Energy of kth single-particle energy level.
     ! Notes:
-    !   The degeneracy of this level should be returned by degen(k).
+    !  1. The degeneracy of this level should be returned by degen(k).
+    !  2. This can be modified to calculate the thermodynamics in other
+    !     geometries. If you do that, you must modify degen() too.
     implicit none
     integer, intent(in) :: k
     real(rk) :: ek
 
+    ! Isotropic harmonic oscillator
     ek = k + d/2._rk
   end function ek
 
@@ -143,12 +139,13 @@ contains
     ! Input:
     !   k:  Index, k=0,1,2,...
     ! Output:
-    !   Degeneracy of an oscillator with k quanta of energy.
+    !   Degeneracy of a single-particle state with energy ek(k)
     ! Notes:
-    !   Before spin degeneracy,
-    !      g = (k + 1) * ... * (k + d - 1) / (d-1)!
-    !   which is the number of ways to distribute k quanta into d groups,
-    !   including empty groups.
+    !  1. Before spin degeneracy, for the isotropic harmonic oscillator,
+    !       g = (k + 1) * ... * (k + d - 1) / (d-1)!
+    !     which is the number of ways to distribute k quanta into d groups,
+    !     including empty groups.
+    !  2. This can be modified for other geometries -- see ek() above.
     implicit none
     integer, intent(in) :: k
 
