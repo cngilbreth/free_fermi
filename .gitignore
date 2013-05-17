@@ -23,3 +23,5 @@ semantic.cache
 .asciifiles
 test.out
 free_fermi
+free_fermi_recurse
+archive
