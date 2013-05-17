@@ -186,7 +186,7 @@ contains
     do
        p = exp(beta * (ek(k) - mu))
        term = 1._rk/(1._rk + p) * degen(k)
-       if (abs(term) .lt. abs(nmu)*epsilon(1._rk)) exit
+       if (abs(term) .lt. epsilon(1._rk)) exit
        nmu = nmu + term
        k = k + 1
     end do
@@ -591,25 +591,25 @@ contains
     complex*16 :: zlog1p
 
     integer    :: n
-    complex*16 :: delta, z1
+    complex*16 :: zlog1p_prev, z1
 
     if (abs(z) < 0.5_rk) then
        ! Use Taylor series
-       zlog1p = z
-       n  = 2
        z1 = -z * z
-       delta = z1/2
-       do while (abs(delta / zlog1p) .gt. epsilon(1._rk))
-          ! delta = (-z)**n/n,  z1 = (-z)**n
-          zlog1p = zlog1p + delta
-          n  = n + 1
+       n  = 2
+       zlog1p_prev = z
+       zlog1p = z + z1/2
+       do while (zlog1p .ne. zlog1p_prev)
           z1 = -z * z1
-          delta = z1/n
+          n  = n + 1
+          zlog1p_prev = zlog1p
+          zlog1p = zlog1p + z1/n
        end do
     else
        zlog1p = log(1+z)
     end if
   end function zlog1p
+
 
 end module free_fermi
 
