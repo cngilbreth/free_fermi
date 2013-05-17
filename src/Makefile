@@ -7,6 +7,9 @@ free_fermi: free_fermi.o
 free_fermi_gc: free_fermi_gc.o
 	$(FC) -o $@ $+
 
+test: free_fermi
+	cd ../test && ./test.sh
+
 clean:
 	rm -f *.o *.mod
 
