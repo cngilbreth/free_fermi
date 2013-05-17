@@ -4,6 +4,8 @@
 !
 ! Copyright (c) 2013 Christopher N. Gilbreth
 !
+! Version 1.2, May 2013
+!
 ! Permission is hereby granted, free of charge, to any person obtaining a copy
 ! of this software and associated documentation files (the "Software"), to deal
 ! in the Software without restriction, including without limitation the rights
@@ -21,7 +23,10 @@
 ! LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 ! OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 ! SOFTWARE.
-program free_fermi
+
+! Main program is at the bottom of the file
+
+module free_fermi
   implicit none
 
   integer,  parameter :: rk = kind(1d0)
@@ -36,83 +41,11 @@ program free_fermi
 
   ! MISC PARAMETERS
   real(rk), parameter :: pi=3.141592653589793_rk
-  character(len=*), parameter :: fmt = 'es15.8'
 
-
-  ! Beta: inverse temperature (1/T)
-  real(rk) :: beta
-  ! Number of particles for first and second species
-  integer :: A, nlevels, k
-  ! Misc. variables
-  character(len=256) :: buf
-  character(len=32)  :: obs
-  real(rk) :: val, lnZ, E, np, Eplus, Eminus
-  real(rk), allocatable :: nk(:)
-
-  if (command_argument_count() .lt. 3) then
-     stop "Wrong number of arguments"
-  end if
-  call getarg(1,obs)
-  call getarg(2,buf); read(buf,*) A
-  call getarg(3,buf); read(buf,*) beta
-
-  select case (obs)
-  case ('mu')
-     ! Compute chemical potential
-     call find_mu(beta,A,val)
-  case ('lnZ')
-     ! Compute log of partition function
-     call calc_lnZ(beta,A,val)
-  case ('F')
-     ! Compute free energy
-     call calc_lnZ(beta,A,val)
-     val = -val/beta
-  case ('E')
-     ! Compute thermal energy
-     call calc_lnZ(beta,A,lnZ)
-     call calc_E(beta,A,lnZ,val)
-  case ('C')
-     ! Compute heat capacity
-     ! FIXME: Would be preferrable to use <(Ĥ-E)^2> formula rather than
-     ! numerical differentiation.
-     call calc_lnZ(beta/(1 + dT_T),A,lnZ)
-     call calc_E(beta/(1 + dT_T),A,lnZ,Eplus)
-     call calc_lnZ(beta/(1 - dT_T),A,lnZ)
-     call calc_E(beta/(1 - dT_T),A,lnZ,Eminus)
-     val = beta*(Eplus - Eminus)/(2*dT_T)
-     write (6,'(es15.4)') val
-     goto 10
-  case ('nk')
-     ! Compute single-particle state occupations
-     if (command_argument_count() .ne. 4) stop "must specify number of levels for this command"
-     call getarg(4,buf); read(buf,*) nlevels
-     allocate(nk(0:nlevels-1))
-     call calc_lnZ(beta,A,lnZ)
-     call calc_nk(beta,A,lnZ,nlevels,nk)
-     write (*,'(a4,tr2,a15,tr2,a15,tr2,a6)') "#  k", "e(k)", "n(e(k))", "degen"
-     E = 0.d0; np = 0.d0
-     do k=0,nlevels-1
-        write (*,'(i4,tr2,'//trim(fmt)//',tr2,'//trim(fmt)//',tr2,i6)') &
-             k, ek(k), nk(k), degen(k)
-        E = E + ek(k) * nk(k) * degen(k)
-        np = np + nk(k) * degen(k)
-     end do
-     write (*,'(a,'//trim(fmt)//')') "# Sum of energies: ", E
-     write (*,'(a,'//trim(fmt)//')') "# Sum of particle numbers: ", np
-     goto 10
-  case default
-     write (0,'(a)') "Error: invalid observable "//trim(obs)//"."
-     stop
-  end select
-
-  write (6,'('//trim(fmt)//')') val
-10 continue
 
 contains
 
-
-   ! ** Physical stuff **********************************************************
-
+   ! ** Single-particle states *************************************************
 
   function ek(k)
     ! Energy of kth single-particle energy level, starting from k=0, in some
@@ -124,7 +57,7 @@ contains
     ! Notes:
     !  1. The degeneracy of this level should be returned by degen(k).
     !  2. This can be modified to calculate the thermodynamics in other
-    !     geometries. If you do that, you must modify degen() too.
+    !     confinements. If you do that, you must modify degen() too.
     implicit none
     integer, intent(in) :: k
     real(rk) :: ek
@@ -139,13 +72,13 @@ contains
     ! Input:
     !   k:  Index, k=0,1,2,...
     ! Output:
-    !   Degeneracy of a single-particle state with energy ek(k)
+    !   Number of single-particle states with energy ek(k)
     ! Notes:
-    !  1. Before spin degeneracy, for the isotropic harmonic oscillator,
+    !  1. Excluding spin degeneracy, for the isotropic harmonic oscillator,
     !       g = (k + 1) * ... * (k + d - 1) / (d-1)!
     !     which is the number of ways to distribute k quanta into d groups,
     !     including empty groups.
-    !  2. This can be modified for other geometries -- see ek() above.
+    !  2. This can be modified for other confinements -- see ek() above.
     implicit none
     integer, intent(in) :: k
 
@@ -432,6 +365,81 @@ contains
 
 
 
+
+  ! ** Occupations *************************************************************
+
+
+  subroutine calc_nk(beta,A,lnZ,N,nk)
+    ! Calculate the occupation numbers of the first N single-particle states.
+    ! Input:
+    !   beta:  Inverse temperature
+    !   mu:    Chemical potential
+    !   A:     Number of particles
+    !   N:     Number of s.p. states to consider
+    !   phi:   Phase angle for particle-number projection
+    ! Notes:
+    !   This does not include degeneracies. We compute the result for one
+    !   degenerate state in each level.
+    implicit none
+    real(rk), intent(in) :: beta
+    integer,  intent(in) :: A, N
+    real(rk), intent(in) :: lnZ
+    real(rk), intent(out) :: nk(0:N-1)
+
+    real(rk), parameter :: lb = 0._rk, ub = 2._rk*pi
+    integer,  parameter :: nreg = 128
+
+    complex(rk) :: sum(0:N-1)
+    real(rk) :: phi, dphi, mu
+    integer :: i
+
+    call find_mu(beta,A,mu)
+
+    ! Numerical integration -- trapezoidal
+    dphi = (ub - lb)/nreg
+    phi = lb
+    sum = exp(lntrnk_phi(beta,mu,A,N,phi)-lnZ) * dphi/2
+    do i=1,nreg-1
+       phi = phi + dphi
+       sum = sum + exp(lntrnk_phi(beta,mu,A,N,phi)-lnZ)*dphi
+    end do
+    sum = sum + exp(lntrnk_phi(beta,mu,A,N,ub)-lnZ) * dphi/2
+
+    nk = real(sum) / (2*pi)
+  end subroutine calc_nk
+
+
+
+  function lntrnk_phi(beta,mu,A,N,phi) result(lntrnk)
+    ! Compute the log of the numerators of the occupations of the states in the
+    ! first k energy levels:
+    !   log[Tr(exp{-β(h-μ)+iφ} n̂(k))]
+    !     = log[1/(1+exp{β[ϵ(k)-μ]-iφ}) * Tr(exp{-β[ϵ(k)-μ]+iφ})]
+    ! for k=0:N-1.
+    ! Input:
+    !   beta:  Inverse temperature
+    !   mu:    Chemical potential
+    !   A:     Number of particles
+    !   N:     Number of s.p. states to consider
+    !   phi:   Phase angle for particle-number projection
+    ! Notes:
+    !   This does not include degeneracies. We compute the result for one
+    !   degenerate state in each level.
+    implicit none
+    real(rk), intent(in) :: beta,mu,phi
+    integer,  intent(in) :: A, N
+    complex(rk) :: lntrnk(0:N-1)
+
+    integer :: k
+
+    do k=0,N-1
+       ! log[1/(1+exp{β[ϵ(k)-μ]-iφ}) * Tr(exp{-β[ϵ(k)-μ]+iφ})]
+       lntrnk(k) = -zlog1pe(beta * (ek(k) - mu) - (0._rk,1._rk)*phi) &
+            + lntrgc_phi(beta,mu,A,phi)
+    end do
+  end function lntrnk_phi
+
+
   ! ** Heat capacity (DOESN'T WORK) ********************************************
 
   ! These routines are supposed to implement the heat capacity by calculating
@@ -515,80 +523,6 @@ contains
   ! end function lntrc_phi
 
 
-  ! ** Occupations *************************************************************
-
-
-  subroutine calc_nk(beta,A,lnZ,N,nk)
-    ! Calculate the occupation numbers of the first N single-particle states.
-    ! Input:
-    !   beta:  Inverse temperature
-    !   mu:    Chemical potential
-    !   A:     Number of particles
-    !   N:     Number of s.p. states to consider
-    !   phi:   Phase angle for particle-number projection
-    ! Notes:
-    !   This does not include degeneracies. We compute the result for one
-    !   degenerate state in each level.
-    implicit none
-    real(rk), intent(in) :: beta
-    integer,  intent(in) :: A, N
-    real(rk), intent(in) :: lnZ
-    real(rk), intent(out) :: nk(0:N-1)
-
-    real(rk), parameter :: lb = 0._rk, ub = 2._rk*pi
-    integer,  parameter :: nreg = 128
-
-    complex(rk) :: sum(0:N-1)
-    real(rk) :: phi, dphi, mu
-    integer :: i
-
-    call find_mu(beta,A,mu)
-
-    ! Numerical integration -- trapezoidal
-    dphi = (ub - lb)/nreg
-    phi = lb
-    sum = exp(lntrnk_phi(beta,mu,A,N,phi)-lnZ) * dphi/2
-    do i=1,nreg-1
-       phi = phi + dphi
-       sum = sum + exp(lntrnk_phi(beta,mu,A,N,phi)-lnZ)*dphi
-    end do
-    sum = sum + exp(lntrnk_phi(beta,mu,A,N,ub)-lnZ) * dphi/2
-
-    nk = real(sum) / (2*pi)
-  end subroutine calc_nk
-
-
-
-  function lntrnk_phi(beta,mu,A,N,phi) result(lntrnk)
-    ! Compute the log of the numerators of the occupations of the states in the
-    ! first k energy levels:
-    !   log[Tr(exp{-β(h-μ)+iφ} n̂(k))]
-    !     = log[1/(1+exp{β[ϵ(k)-μ]-iφ}) * Tr(exp{-β[ϵ(k)-μ]+iφ})]
-    ! for k=0:N-1.
-    ! Input:
-    !   beta:  Inverse temperature
-    !   mu:    Chemical potential
-    !   A:     Number of particles
-    !   N:     Number of s.p. states to consider
-    !   phi:   Phase angle for particle-number projection
-    ! Notes:
-    !   This does not include degeneracies. We compute the result for one
-    !   degenerate state in each level.
-    implicit none
-    real(rk), intent(in) :: beta,mu,phi
-    integer,  intent(in) :: A, N
-    complex(rk) :: lntrnk(0:N-1)
-
-    integer :: k
-
-    do k=0,N-1
-       ! log[1/(1+exp{β[ϵ(k)-μ]-iφ}) * Tr(exp{-β[ϵ(k)-μ]+iφ})]
-       lntrnk(k) = -zlog1pe(beta * (ek(k) - mu) - (0._rk,1._rk)*phi) &
-            + lntrgc_phi(beta,mu,A,phi)
-    end do
-  end function lntrnk_phi
-
-
 
   ! ** MATHEMATICAL ROUTINES ***************************************************
 
@@ -657,24 +591,109 @@ contains
     complex*16 :: zlog1p
 
     integer    :: n
-    complex*16 :: zlog1p_prev, z1
+    complex*16 :: delta, z1
 
     if (abs(z) < 0.5_rk) then
        ! Use Taylor series
-       z1 = -z * z
+       zlog1p = z
        n  = 2
-       zlog1p_prev = z
-       zlog1p = z + z1/2
-       do while (zlog1p .ne. zlog1p_prev)
-          z1 = -z * z1
+       z1 = -z * z
+       delta = z1/2
+       do while (abs(delta / zlog1p) .gt. epsilon(1._rk))
+          ! delta = (-z)**n/n,  z1 = (-z)**n
+          zlog1p = zlog1p + delta
           n  = n + 1
-          zlog1p_prev = zlog1p
-          zlog1p = zlog1p + z1/n
+          z1 = -z * z1
+          delta = z1/n
        end do
     else
        zlog1p = log(1+z)
     end if
   end function zlog1p
 
+end module free_fermi
 
-end program free_fermi
+
+! ** DRIVER PROGRAM ************************************************************
+
+
+program run_free_fermi
+  use free_fermi
+  implicit none
+
+  character(len=*), parameter :: fmt = 'es15.8'
+
+
+  ! Beta: inverse temperature (1/T)
+  real(rk) :: beta
+  ! Number of particles for first and second species
+  integer :: A, nlevels, k
+  ! Misc. variables
+  character(len=256) :: buf
+  character(len=32)  :: obs
+  real(rk) :: val, lnZ, E, np, Eplus, Eminus
+  real(rk), allocatable :: nk(:)
+
+  if (command_argument_count() .lt. 3) then
+     stop "Wrong number of arguments"
+  end if
+  call getarg(1,obs)
+  call getarg(2,buf); read(buf,*) A
+  call getarg(3,buf); read(buf,*) beta
+
+  select case (obs)
+  case ('mu')
+     ! Compute chemical potential
+     call find_mu(beta,A,val)
+  case ('lnZ')
+     ! Compute log of partition function
+     call calc_lnZ(beta,A,val)
+  case ('F')
+     ! Compute free energy
+     call calc_lnZ(beta,A,val)
+     val = -val/beta
+  case ('E')
+     ! Compute thermal energy
+     call calc_lnZ(beta,A,lnZ)
+     call calc_E(beta,A,lnZ,val)
+  case ('C')
+     ! Compute heat capacity
+     ! FIXME: Would be preferrable to use <(Ĥ-E)^2> formula rather than
+     ! numerical differentiation.
+     call calc_lnZ(beta/(1 + dT_T),A,lnZ)
+     call calc_E(beta/(1 + dT_T),A,lnZ,Eplus)
+     call calc_lnZ(beta/(1 - dT_T),A,lnZ)
+     call calc_E(beta/(1 - dT_T),A,lnZ,Eminus)
+     val = beta*(Eplus - Eminus)/(2*dT_T)
+     write (6,'(es15.4)') val
+     goto 10
+  case ('nk')
+     ! Compute single-particle state occupations
+     ! First obtain number of levels from the command line
+     if (command_argument_count() .ne. 4) stop "must specify number of levels for this command"
+     call getarg(4,buf); read(buf,*) nlevels
+     allocate(nk(0:nlevels-1))
+     ! Now compute
+     call calc_lnZ(beta,A,lnZ)
+     call calc_nk(beta,A,lnZ,nlevels,nk)
+     ! And print the results
+     write (*,'(a4,tr2,a15,tr2,a15,tr2,a6)') "#  k", "e(k)", "n(e(k))", "degen"
+     E = 0.d0; np = 0.d0
+     do k=0,nlevels-1
+        write (*,'(i4,tr2,'//trim(fmt)//',tr2,'//trim(fmt)//',tr2,i6)') &
+             k, ek(k), nk(k), degen(k)
+        E = E + ek(k) * nk(k) * degen(k)
+        np = np + nk(k) * degen(k)
+     end do
+     write (*,'(a,'//trim(fmt)//')') "# Sum of energies: ", E
+     write (*,'(a,'//trim(fmt)//')') "# Sum of particle numbers: ", np
+     goto 10
+  case default
+     write (0,'(a)') "Error: invalid observable "//trim(obs)//"."
+     stop
+  end select
+
+  write (6,'('//trim(fmt)//')') val
+10 continue
+
+end program run_free_fermi
