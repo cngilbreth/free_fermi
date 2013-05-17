@@ -4,7 +4,7 @@
 !
 ! Copyright (c) 2013 Christopher N. Gilbreth
 !
-! Version 1.2, May 2013
+! Version 1.3, May 2013
 !
 ! Permission is hereby granted, free of charge, to any person obtaining a copy
 ! of this software and associated documentation files (the "Software"), to deal

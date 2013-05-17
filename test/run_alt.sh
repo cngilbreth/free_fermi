@@ -1,8 +1,8 @@
 #!/bin/bash
 
-PROG=../src/free_fermi
+PROG=../altsrc/free_fermi_recurse
 
-betas="0.1 1.0 `seq 2.0 2.0 10.0`"
+betas="0.1 1.0 2.0 4.0 6.0 8.0 10.0"
 N=10
 
 echo "#beta       E"
