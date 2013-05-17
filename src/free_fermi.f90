@@ -4,7 +4,7 @@
 !
 ! Copyright (c) 2013 Christopher N. Gilbreth
 !
-! Version 1.3, May 2013
+! Version xxx, May 2013
 !
 ! Permission is hereby granted, free of charge, to any person obtaining a copy
 ! of this software and associated documentation files (the "Software"), to deal
@@ -168,7 +168,7 @@ contains
 
   function calc_Nmu(beta,mu) result(nmu)
     ! Calculate the thermal average of the number of particles at a given
-    ! chemical potential.
+    ! temperature and chemical potential.
     ! Input:
     !   beta:   Inverse temperature
     !   mu:     Chemical potential
@@ -186,7 +186,7 @@ contains
     do
        p = exp(beta * (ek(k) - mu))
        term = 1._rk/(1._rk + p) * degen(k)
-       if (abs(term) .lt. epsilon(1._rk)) exit
+       if (dratio(term,nmu) .lt. epsilon(1._rk)) exit
        nmu = nmu + term
        k = k + 1
     end do
@@ -211,6 +211,13 @@ contains
     !   2. Exponents in this calculation can become quite large and positive or
     !      large and negative. This version works with logs as far as possible,
     !      which is necessary to prevent over/underflow.
+    !   3. The calculation includes a chemical potential to stabilize the
+    !      Fourier transform:
+    !        Z = Tr_N exp(-β h)
+    !          = [1/2π] * ∫dφ exp(-i φ N) det(1 + exp(-β h) exp(i φ))
+    !          = [exp(-β μ N)/2π] * ∫dφ exp(-i φ N)
+    !                                        * det(1 + exp(-β (h - μ)) exp(i φ))
+    !      In exact arithmetic, the result is independent of μ.
     implicit none
     real(rk), intent(in) :: beta
     integer,  intent(in) :: A
@@ -275,7 +282,7 @@ contains
        lnterm = -beta * (ek(m) - mu) + (0._rk,1._rk) * phi
        ! dlntr = log[(1 + term)**degen(m)]
        dlntr = zlog1pe(lnterm) * degen(m)
-       if (abs(dlntr) .lt. abs(lntr) * epsilon(1._rk)) exit
+       if (zratio(dlntr,lntr) .lt. epsilon(1._rk)) exit
        lntr = lntr + dlntr
        m = m + 1
     end do
@@ -297,7 +304,7 @@ contains
     !   E:      Thermal energy in the canonical ensemble
     ! Notes:
     !   E = Tr_N [exp(-β h) h]/Z
-    !     = 1/(2π Z) * ∫dφ exp(-iφA - βμ) Tr[exp(-βh) h exp(iφ + βμ)]
+    !     = 1/(2π Z) * ∫dφ exp(-iφA - βμA) Tr[exp(-βh) h exp(iφ + βμ)]
     implicit none
     real(rk), intent(in) :: beta
     integer,  intent(in) :: A
@@ -355,15 +362,13 @@ contains
     do
        fac = exp(beta * (ek(k) - mu) - (0._rk,1._rk)*phi)
        term = 1._rk/(1._rk + fac) * degen(k) * ek(k)
-       if (abs(term) .lt. abs(tr)*epsilon(1._rk)) exit
+       if (zratio(term,tr) .lt. epsilon(1._rk)) exit
        tr = tr + term
        k = k + 1
     end do
     ! Partition function must be treated as a log
     lntr = log(tr) + lntrgc_phi(beta,mu,A,phi)
   end function lntrh_phi
-
-
 
 
   ! ** Occupations *************************************************************
@@ -581,34 +586,70 @@ contains
     ! Compute log(1+z), taking special care for the case |z| << 1 to avoid loss
     ! of precision.
     ! Inputs:
-    !   z:  Any complex number
+    !   z:  Nonzero complex number
     ! Outputs:
     !   return value:  log(1+z)
     ! Remark:
     !   Basically accurate to machine precision.
     implicit none
-    complex*16, intent(in) :: z
-    complex*16 :: zlog1p
+    complex(rk), intent(in) :: z
+    complex(rk) :: zlog1p
 
-    integer    :: n
-    complex*16 :: zlog1p_prev, z1
+    integer     :: n
+    complex(rk) :: zlprev, z1
 
     if (abs(z) < 0.5_rk) then
        ! Use Taylor series
-       z1 = -z * z
+       ! zlog1p = x - x**2/2 + x**3/3 - x**4/4 + ...
        n  = 2
-       zlog1p_prev = z
+       z1 = -z * z ! z1 = (-z)**n
+       zlprev = z
        zlog1p = z + z1/2
-       do while (zlog1p .ne. zlog1p_prev)
-          z1 = -z * z1
+       do while (abs(zlog1p - zlprev) .gt. tiny(1._rk))
           n  = n + 1
-          zlog1p_prev = zlog1p
+          z1 = -z * z1
+          zlprev = zlog1p
           zlog1p = zlog1p + z1/n
        end do
     else
        zlog1p = log(1+z)
     end if
   end function zlog1p
+
+
+  pure function dratio(a,b)
+    ! Robust ratio of magitude of a to b
+    ! Inputs:
+    !   a, b: Real
+    ! Output:
+    !   Return value: A nonnegative real number measuring the magnitude of |a|
+    !   relative to |b|.
+    implicit none
+    real(rk), intent(in) :: a, b
+    real(rk) :: dratio
+
+    real(rk), parameter :: t = tiny(1._rk)/epsilon(1._rk)
+
+    dratio = abs(a)/(abs(b) + t)
+  end function dratio
+
+
+  pure function zratio(a,b)
+    ! Robust ratio of magitude of a to b
+    ! Inputs:
+    !   a, b: Complex
+    ! Output:
+    !   Return value: A nonnegative real number measuring the magnitude of |a|
+    !   relative to |b|.
+    implicit none
+    complex(rk), intent(in) :: a, b
+    real(rk) :: zratio
+
+    real(rk), parameter :: t = tiny(1._rk)/epsilon(1._rk)
+
+    zratio = abs(a)/(abs(b) + t)
+  end function zratio
+
 
 
 end module free_fermi
@@ -623,7 +664,6 @@ program run_free_fermi
 
   character(len=*), parameter :: fmt = 'es15.8'
 
-
   ! Beta: inverse temperature (1/T)
   real(rk) :: beta
   ! Number of particles for first and second species
@@ -634,12 +674,17 @@ program run_free_fermi
   real(rk) :: val, lnZ, E, np, Eplus, Eminus
   real(rk), allocatable :: nk(:)
 
+  ! Get command line arguments
   if (command_argument_count() .lt. 3) then
      stop "Wrong number of arguments"
   end if
+  ! First argument is observable to compute
   call getarg(1,obs)
+  ! Second is number of particles
   call getarg(2,buf); read(buf,*) A
+  ! Third is inverse temperature
   call getarg(3,buf); read(buf,*) beta
+  ! Fourth argument is only required for nk, see below.
 
   select case (obs)
   case ('mu')
