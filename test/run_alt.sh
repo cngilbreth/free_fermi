@@ -25,17 +25,4 @@ for beta in $betas; do
     $PROG F $N $beta
 done
 
-echo ""
-echo "#beta     E_spin"
-for beta in $betas; do
-    echo -n "$beta   "
-    $PROG E_spin $N $beta
-done
-
-echo ""
-echo "#beta     F_spin"
-for beta in $betas; do
-    echo -n "$beta   "
-    $PROG F_spin $N $beta
-done
 

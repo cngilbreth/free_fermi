@@ -1,7 +1,9 @@
-! free_fermi.f90: Code for calculating canonical thermodynamic quantities for
-! free fermions in a harmonic trap of arbitrary dimension.
+! free_fermi_recurse.f90: Code for calculating canonical thermodynamic
+! quantities for free fermions in a harmonic trap of arbitrary dimension.
+! This version uses a recursion-relation method.
 ! http://infty.us/free_fermi/free_fermi.html
-! v1.1, March 2013
+!
+! Version 1.3, May 2013
 !
 ! Copyright (c) 2013 Christopher N. Gilbreth
 !
@@ -36,15 +38,31 @@
 !
 ! (3) The MPFUN90 library is not covered by the above copyright. See instead the
 ! files mpfun90.f90 and mpmod90.f90 for copyright information about those files.
-
+!
+! TODO:
+!
+! 1. It would be interesting to try removing the arbitrary precision arithmetic
+!    and replace it with a routine for exact numerical summation of ill-conditioned
+!    sums. This might be all that's needed.
+! 2. It might also be the case that introducing a chemical potential, in the
+!    same way as the projection code, would be sufficient.
+!
 program free_fermi
   use mpmodule
   implicit none
 
   integer, parameter :: rk = selected_real_kind(p=15)
+
+  ! PHYSICAL PARAMETERS
+  integer, parameter :: d = 3          ! dimension
+  integer, parameter :: spin_degen = 1 ! Spin degeneracy
+
+  ! NUMERICAL PARAMETERS
   integer, parameter :: internal_precision = 1000
-  integer, parameter :: d = 3 ! dimension
+
+  ! MISC PARAMETERS
   character(len=*), parameter :: fmt = '(es15.8)'
+
 
   ! Beta: inverse temperature (1/T), with T in units of hbar * ω.
   real(rk) :: beta
@@ -77,11 +95,6 @@ program free_fermi
      call calc_Z(beta,A,Z)
      call calc_E(beta,A,Z,E)
      val = E(A)
-  case ('E_spin')
-     allocate(Z(0:A),E(0:A))
-     call calc_Z_spin(beta,A,Z)
-     call calc_E_spin(beta,A,Z,E)
-     val = E(A)
   case ('Z')
      allocate(Z(0:A))
      call calc_Z(beta,A,Z)
@@ -89,10 +102,6 @@ program free_fermi
   case ('F')
      allocate(Z(0:A))
      call calc_Z(beta,A,Z)
-     val = -log(Z(A))/beta
-  case ('F_spin')
-     allocate(Z(0:A))
-     call calc_Z_spin(beta,A,Z)
      val = -log(Z(A))/beta
   case ('C')
      allocate(CC(0:A))
@@ -111,10 +120,10 @@ contains
 
   subroutine print_help()
     implicit none
-    write (6,'(a)') 'ffree: Calculate canonical-ensemble thermodynamic observables for a single species'
-    write (6,'(a)') '       of noninteracting fermions in a harmonic trap.'
+    write (6,'(a)') 'free_fermi_recurse: Calculate canonical-ensemble thermodynamic observables'
+    write (6,'(a)') '       for noninteracting fermions in a harmonic trap.'
     write (6,'(a)') ''
-    write (6,'(a)') 'Usage: ffree <obs> <A> <beta>'
+    write (6,'(a)') 'Usage: free_fermi_recurse <obs> <A> <beta>'
     write (6,'(a)') ''
     write (6,'(a)') 'where the parameters are:'
     write (6,'(a)') ''
@@ -127,15 +136,10 @@ contains
     write (6,'(a)') '  E            Energy, canonical ensemble'
     write (6,'(a)') '  C            Heat capacity, canonical ensemble'
     write (6,'(a)') '  F            Free energy, canonical ensemble'
-    write (6,'(a)') '  E_spin       Energy, canonical ensemble, w/ spin'
-    write (6,'(a)') '  F_spin       Free energy, canonical ensemble, w/ spin'
     write (6,'(a)') ''
     write (6,'(a)') 'Notes:'
     write (6,'(a)') '  The calculations are done for a system of noninteracting fermions'
     write (6,'(a)') '  moving in a trap of frequency omega.'
-    write (6,'(a)') ''
-    write (6,'(a)') '  By default the fermions do not have a spin degree of freedom. The H_spin and F_spin'
-    write (6,'(a)') '  observables, however, do include a spin degree of freedom for each species.'
     write (6,'(a)') ''
     write (6,'(a)') '  All energies and temperatures are measured in units of hbar * omega.'
   end subroutine print_help
@@ -147,15 +151,15 @@ contains
     !   S(k) = Σ exp(-beta k ϵ(j))
     ! Where the sum is over all s.p. states j.
     ! Input:
-    !   beta:   Inverse temperature 1/T, T in units of ℏω.
-    !   k:   Integer, > 0.
+    !   beta:  Inverse temperature 1/T, T in units of ℏω.
+    !   k:     Integer, > 0.
     ! Output:
     !   S(k), as above.
     implicit none
     type(mp_real), intent(in) :: beta
     integer,  intent(in) :: k
 
-    Sk = (2*sinh((beta*k)/2))**(-d)
+    Sk = spin_degen * (2*sinh((beta*k)/2))**(-d)
   end function Sk
 
 
@@ -322,67 +326,5 @@ contains
 !    C = (E⁺-E⁻)/(2*ΔT)
 !  end subroutine calc_CN_dT
 
-
-  subroutine calc_Z_spin(beta1,N,Z)
-    ! Calculate the canonical partition functions for 0,1,...,N free fermions in
-    ! a d-dimensional harmonic trap, INCLUDING a spin degree of freedom.
-    implicit none
-    real(rk), intent(in) :: beta1
-    integer,  intent(in) :: N
-    type(mp_real), intent(out) :: Z(0:N)
-
-    integer :: k, N1
-    type(mp_real) :: beta
-    type(mp_real) :: Svals(1:N)
-
-    beta = beta1
-    do k=1,N
-       Svals(k) = Sk(beta,k)
-    end do
-
-    Z(0) = 1
-    do N1=1,N
-       Z(N1) = 0
-       do k=1,N1
-          Z(N1) = Z(N1) + (-1)**(k+1) * 2 * Svals(k) * Z(N1-k)
-       end do
-       Z(N1) = Z(N1) / N1
-    end do
-  end subroutine calc_Z_spin
-
-
-  subroutine calc_E_spin(beta1,N,Z,E)
-    ! Calculate the canonical thermal energy E for 0,1,...,N free fermions in a
-    ! d-dimensional harmonic trap, INCLUDING a spin degree of freedom.
-    implicit none
-    real(rk), intent(in)  :: beta1
-    integer,  intent(in)  :: N
-    type(mp_real), intent(in)  :: Z(0:N)
-    type(mp_real), intent(out) :: E(0:N)
-
-    integer :: k, N1
-    type(mp_real) :: beta
-    type(mp_real) :: Svals(1:N), S1vals(1:N)
-
-    beta = beta1
-    do k=1,N
-       Svals(k) = Sk(beta,k)
-       S1vals(k) = S1k(beta,k)
-    end do
-
-    ! First: Calculate Z'(beta), storing the result in E
-    E(0) = 0
-    do N1=1,N
-       E(N1) = 0
-       do k=1,N1
-          E(N1) = E(N1) + (-1)**(k+1) * 2 * (S1vals(k) * Z(N1-K) + Svals(k) * E(N1-k))
-       end do
-       E(N1) = E(N1) / N1
-    end do
-    ! Now E = -Z' / Z.
-    do N1=1,N
-       E(N1) = -E(N1) / Z(N1)
-    end do
-  end subroutine calc_E_spin
 
 end program free_fermi

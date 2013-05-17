@@ -9,7 +9,7 @@ if [ $? -ne 0 ]; then
     echo "Error: test failed!"
     echo "got                                                           expected"
     echo "---                                                           --------"
-    diff -y run_alt1000.ref run_alt.txt
+    diff -y run_alt.txt run_alt1000.ref
     exit 1
 fi
 
