@@ -36,8 +36,8 @@ module free_fermi
   integer, parameter :: d = 3          ! Dimension of space
 
   ! NUMERICAL PARAMETERS
-  integer,  parameter :: nreg = 128        ! Number of integration regions
-  real(rk), parameter :: dT_T = 0.0005_rk  ! ΔT/T for numerical differentiation
+  integer,  parameter :: nreg = 128       ! Number of integration regions
+  real(rk), parameter :: dT_T = 0.001_rk  ! ΔT/T for numerical differentiation
 
   ! MISC PARAMETERS
   real(rk), parameter :: pi=3.141592653589793_rk
@@ -586,31 +586,34 @@ contains
     ! Compute log(1+z), taking special care for the case |z| << 1 to avoid loss
     ! of precision.
     ! Inputs:
-    !   z:  Nonzero complex number
+    !   z:  Any complex number
     ! Outputs:
     !   return value:  log(1+z)
-    ! Remark:
-    !   Basically accurate to machine precision.
     implicit none
     complex(rk), intent(in) :: z
     complex(rk) :: zlog1p
 
-    integer     :: n
-    complex(rk) :: zlprev, z1
+    ! Try to get 80-bit precision float on Intel machines
+    integer, parameter :: rke = selected_real_kind(p=18)
+    complex(rke) :: zlprev, z1, zn, zlsume
+    integer :: n
 
     if (abs(z) < 0.5_rk) then
        ! Use Taylor series
        ! zlog1p = x - x**2/2 + x**3/3 - x**4/4 + ...
+       z1 = -z
        n  = 2
-       z1 = -z * z ! z1 = (-z)**n
+       zn = z1 * z1 ! zn = (-z)**n
        zlprev = z
-       zlog1p = z + z1/2
-       do while (abs(zlog1p - zlprev) .gt. tiny(1._rk))
+       zlsume = z - zn/2
+       do while (abs(zlsume - zlprev) .gt. tiny(1._rke))
           n  = n + 1
-          z1 = -z * z1
-          zlprev = zlog1p
-          zlog1p = zlog1p + z1/n
+          zn = z1 * zn
+          zlprev = zlsume
+          zlsume = zlsume - zn/n
        end do
+       ! Convert back to original precision
+       zlog1p = real(zlsume,rk) + (0._rk,1._rk)*real(aimag(zlsume),rk)
     else
        zlog1p = log(1+z)
     end if
@@ -673,10 +676,12 @@ program run_free_fermi
   character(len=32)  :: obs
   real(rk) :: val, lnZ, E, np, Eplus, Eminus
   real(rk), allocatable :: nk(:)
+  real(rk) :: EdT(4)
 
   ! Get command line arguments
   if (command_argument_count() .lt. 3) then
-     stop "Wrong number of arguments"
+     write (0,*) "Wrong number of arguments"
+     write (0,*) "Usage: free_fermi <observable> <N> <beta>"
   end if
   ! First argument is observable to compute
   call getarg(1,obs)
@@ -703,14 +708,23 @@ program run_free_fermi
      call calc_E(beta,A,lnZ,val)
   case ('C')
      ! Compute heat capacity
-     ! FIXME: Would be preferrable to use <(Ĥ-E)^2> formula rather than
-     ! numerical differentiation.
+     ! Use 5-point numerical derivative
+
+     call calc_lnZ(beta/(1 + 2*dT_T),A,lnZ)
+     call calc_E(beta/(1 + 2*dT_T),A,lnZ,EdT(4))
+
      call calc_lnZ(beta/(1 + dT_T),A,lnZ)
-     call calc_E(beta/(1 + dT_T),A,lnZ,Eplus)
+     call calc_E(beta/(1 + dT_T),A,lnZ,EdT(3))
+
      call calc_lnZ(beta/(1 - dT_T),A,lnZ)
-     call calc_E(beta/(1 - dT_T),A,lnZ,Eminus)
-     val = beta*(Eplus - Eminus)/(2*dT_T)
-     write (6,'(es15.4)') val
+     call calc_E(beta/(1 - dT_T),A,lnZ,EdT(2))
+
+     call calc_lnZ(beta/(1 - 2*dT_T),A,lnZ)
+     call calc_E(beta/(1 - 2*dT_T),A,lnZ,EdT(1))
+
+     val = beta*(EdT(1) - 8*EdT(2) + 8*EdT(3) - EdT(4))/(12*dT_T)
+
+     write (6,'(es15.8)') val
      goto 10
   case ('nk')
      ! Compute single-particle state occupations
